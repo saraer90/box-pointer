@@ -139,36 +139,36 @@
 
 
 ;Sentencias canvas 
-(define frame (new frame%
-                   [label "Box and Pointer"]
-                   [width 300]
-                   [height 300]))
-
 (define my-canvas%
   (class canvas%
     (super-new)
     (inherit get-dc)
+    (init-field pairs)
+    (field [listaFunc (crea-lista-draw pairs (cons 0 0))])
     
     (define/override (on-event e)
            (if (equal? (send e get-event-type) 'left-down)
-               (let ([my-dc (get-dc)]
-                     (old-lista-func listaFunc))
+               (let ([my-dc (get-dc)])
                  (send my-dc clear)
-                 (define listaFunc (detector-colisiones old-lista-func (cons (send e get-x) (send e get-y)) my-dc))
+                 (set! listaFunc (detector-colisiones listaFunc (cons (send e get-x) (send e get-y)) my-dc))
                  (pinta-lista listaFunc my-dc)
                 )
              )
-     )   
+     )
+    
+    (define/override (on-paint)
+        (pinta-lista listaFunc (get-dc))
+    )
    )
  )
 
-(define lista (cons (cons "p" 1) (cons 1 2)))
-(define listaFunc (crea-lista-draw lista (cons 0 0)))
-(new my-canvas% [parent frame]
-     [paint-callback
-      (lambda (canvas dc)
-        (pinta-lista listaFunc dc))]
-)
+(define lista-parejas (cons (cons "p" (cons 3 4)) (cons 1 2)))
+
+(define frame (new frame%
+                   [label "Box and Pointer"]
+                   [width 300]
+                   [height 300]))
+(new my-canvas% [pairs lista-parejas] [parent frame])   
 (send frame show #t)
 
 
