@@ -7,29 +7,26 @@
 (define PADDING 5)
 
 ;Creación de la lista de funciones: visible siempre a true en el inicio y genera coordenadas
-(define (crea-lista-draw pareja coord)
+(define (lista-draw pareja coord)
   (if (pair? pareja)
       (cons (llama-creador (car pareja) coord "car" #t) (llama-creador (cdr pareja) (cons (+ (car coord) TAM) (cdr coord)) "cdr" #t))
-      (llama-creador pareja coord "dato" #t)
+      (crea-funcion pareja coord "dato" #t)
   )
 )
 
 (define (llama-creador dato coord tipo visible)
-  (if (string=? tipo "dato")
-     (crea-funcion dato coord tipo visible)
      (cons (crea-funcion dato coord tipo visible)
            (let ((x (car coord))
                  (y (cdr coord)))
              (if (pair? dato)
-                 (cond ((string=? tipo "car") (crea-lista-draw dato (cons x (+ MARGEN y))))
-                       ((string=? tipo "cdr") (crea-lista-draw dato (cons (+ MARGEN x) y)))
+                 (cond ((string=? tipo "car") (lista-draw dato (cons x (+ MARGEN y))))
+                       ((string=? tipo "cdr") (lista-draw dato (cons (+ MARGEN x) y)))
                        )
-                 (crea-lista-draw dato coord)
+                 (lista-draw dato coord)
               )
            )
       )         
   )
-)
 
 ;Creador de funciones
 (define (crea-funcion dato coord tipo visible)
@@ -62,12 +59,12 @@
                                  )
                            )
                        )
-                   )
+                   ) ;Cuando no es visible mostramos el indicador para que se expanda
                   (list
                    (send dc draw-rectangle
                          x y       
                          TAM TAM)  
-                   (send dc draw-text (~a "exp.") (+ x PADDING) (+ y PADDING))
+                   (send dc draw-text (~a "+") (+ x PADDING) (+ y PADDING))
                   )
              )
            )
@@ -142,22 +139,25 @@
 (define my-canvas%
   (class canvas%
     (super-new)
+    
     (inherit get-dc)
+    (inherit refresh-now)
+    
     (init-field pairs)
-    (field [listaFunc (crea-lista-draw pairs (cons 0 0))])
+    (field [lista-funciones (lista-draw pairs (cons 0 0))])
     
     (define/override (on-event e)
            (if (equal? (send e get-event-type) 'left-down)
                (let ([my-dc (get-dc)])
                  (send my-dc clear)
-                 (set! listaFunc (detector-colisiones listaFunc (cons (send e get-x) (send e get-y)) my-dc))
-                 (pinta-lista listaFunc my-dc)
+                 (set! lista-funciones (detector-colisiones lista-funciones (cons (send e get-x) (send e get-y)) my-dc))
+                 (refresh-now)
                 )
              )
      )
     
     (define/override (on-paint)
-        (pinta-lista listaFunc (get-dc))
+        (pinta-lista lista-funciones (get-dc))
     )
    )
  )
