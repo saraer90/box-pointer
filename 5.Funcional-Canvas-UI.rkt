@@ -91,8 +91,7 @@
       (let ((funcion (car funciones)))
         (if (intersectan? (funcion dc "coord") mouse-click)
             (cons (crea-funcion (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") (not (funcion dc "visible")))
-                  (propaga-colision (cdr funciones) (not (funcion dc "visible")) dc)
-            )
+                  (cdr funciones))
             (cons (crea-funcion (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") (funcion dc "visible"))
                   (detector-colisiones (cdr funciones) mouse-click dc)
             )
@@ -100,13 +99,6 @@
       )
    )
  )
-      
-(define (propaga-colision funciones visible dc)
-  (if (pair? funciones)
-      (cons (propaga-colision (car funciones) visible dc) (propaga-colision (cdr funciones) visible dc))
-      (crea-funcion (funciones dc "dato") (funciones dc "coord") (funciones dc "tipo") visible)
-   )
-)
 
 (define (detector-colisiones funciones mouse-click dc)
   (if (pair? funciones)
