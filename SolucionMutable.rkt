@@ -3,9 +3,8 @@
 (#%require  racket/format)
 (#%require compatibility/mlist)
 
-(define TAM 30)
-(define MARGEN (+ 20 TAM))
-(define PADDING 5)
+(require "lib/utils.rkt")
+(require "lib/settings.rkt")
 
 ;Creación de la lista de funciones: visible siempre a true en el inicio y genera coordenadas
 
@@ -208,19 +207,3 @@
                    (height 300)))
 (new my-canvas% (pairs lista-parejas) (parent frame))   
 (send frame show #t)
-
-
-;aux
-(define (print-pareja pareja)
-  (if (pair? pareja)
-      (begin 
-        (display "(")
-        (print-dato (car pareja))
-        (display " . ")
-        (print-dato (cdr pareja))
-        (display ")"))))
-
-(define (print-dato dato)
-  (if (pair? dato)
-      (print-pareja dato)
-      (display dato)))

@@ -1,10 +1,8 @@
-(#%require  racket/draw)
-(#%require  racket/gui/base)
-(#%require  racket/format)
-
-(define TAM 30)
-(define MARGEN (+ 20 TAM))
-(define PADDING 5)
+(require  racket/draw)
+(require  racket/gui/base)
+(require  racket/format)
+(require "lib/utils.rkt")
+(require "lib/settings.rkt")
 
 ;Creación de la lista de funciones: visible siempre a true en el inicio y genera coordenadas
 (define (draw list) (list-creator list (if (list? list)
