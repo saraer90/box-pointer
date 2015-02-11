@@ -1,6 +1,7 @@
 #lang racket
 (provide print-pareja)
 (provide mprint-pareja)
+(provide mcopy)
 
 (define (print-pareja pareja)
   (if (pair? pareja)
@@ -32,3 +33,11 @@
   (if (mpair? dato)
       (mprint-pareja dato)
       (display dato)))
+
+(define (mcopy obj)
+ (if (mpair? obj)
+     (mcons (mcopy (mcar obj))
+            (mcopy (mcdr obj)))
+     obj
+  )
+ )
