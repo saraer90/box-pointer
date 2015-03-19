@@ -34,7 +34,7 @@
   )
 
 (define (list-recursion data coord type old-ancestors)
-  (let ((ancestors (cons (cons data coord) old-ancestors))) ;Añadimos el padre a la lista de antecesores
+  (let ((ancestors (cons (cons data coord) old-ancestors)))   ;Añadimos el padre a la lista de antecesores
     (mcons (function-creator data coord type #f #t ancestors) ;Dibujamos la caja
            ;Si el hijo es una pareja movemos las coordenadas sino pintamos directamente dentro
            (if (mpair? ((eval type) data))
@@ -137,12 +137,14 @@
 (define (function-creator pair coord tipo es-dato visible ancestors)
   (let ((x (car coord))
         (y (cdr coord))
+        (parent-coord (if (null? (cdr ancestors)) null (cdadr ancestors)))
         (old-data (~a ((eval tipo) pair))) ;Guardamos el dato que contiene como cadena para que no nos afecten las mutaciones
         (old-data-reference ((eval tipo) pair))) ;Debug: al mutar la lista con las parejas este dato también muta y no podemos ver el estado anterior 
     (lambda (dc msg)
       (cond ((string=? msg "dato") pair)
             ((string=? msg "cambio") (not (equal? old-data (~a ((eval tipo) pair))))) ;Para saber si ha habido una mutación comparamos con la cadena anterior
             ((string=? msg "coord") coord)
+            ((string=? msg "parent-coord") parent-coord)
             ((string=? msg "tipo") tipo)
             ((string=? msg "visible") visible)
             ((string=? msg "es-dato") es-dato)
@@ -152,41 +154,34 @@
                    (cycle (cycle-finder ((eval tipo) pair) ancestors)))
                (if visible
                    (if es-dato
-                       (if (not (car cycle)) 
-                           (list (send dc draw-text (~a dato) (+ x PADDING) (+ y PADDING))) ;Dato simple
-                           ;Else: los ciclos no se pintan
-                           )
+                       (if (car cycle) 
+                           ;Si en vez de dato tenemos un ciclo, debemos pintar la linea
+                           (if (eq? tipo 'mcar)
+                               (draw-cycle coord tipo (cons (+ (cadr cycle) TAM) (cddr cycle)) dc) ;Si es de tipo car tenemos que poner la X final
+                               (draw-cycle coord tipo (cdr cycle) dc)                              ;En la mitad del car y el cdr
+                               )
+                           (send dc draw-text (~a dato) (+ x PADDING) (+ y PADDING)) ;Dato simple
+                       )
                        (list 
                         (send dc draw-rectangle
                               x y       ; Top-left at (x, y), y pixels down from top-left
                               TAM TAM)  ; wide and high
-                        (if (mpair? dato) ;Pintamos las lineas hacia la siquiente caja
-                            (let ((child-coords (if (car cycle) (cdr cycle) (coord-locator pair coord tipo))))
-                              (cond ((car cycle) ;Cuando es un ciclo
-                                     (if (eq? tipo 'mcar)
-                                         (draw-cycle coord tipo (cons (+ (cadr cycle) TAM) (cddr cycle)) dc) ;Si es de tipo car tenemos que poner la X final
-                                         (draw-cycle coord tipo (cdr cycle) dc))                             ;En la mitad del car y el cdr
-                                     )
-                                    ((eq? tipo 'mcar)
-                                     (send dc draw-line ;La linea siempre sale de la parte baja de la caja al ser car
-                                           (+ x (/ TAM 2)) (+ y TAM)
-                                           (+ (car child-coords) TAM) (cdr child-coords))
-                                     )
-                                    ((eq? tipo 'mcdr)
-                                     (if (mlist? dato) ;Si es cdr pintaremos en la parte baja de la caja o a la derecha de la caja según sea lista o no
-                                         (send dc draw-line
-                                               (+ x TAM ) (+ y (/ TAM 2))
-                                               (+ x MARGEN) (+ y (/ TAM 2)))
-                                         (send dc draw-line
-                                               (+ x (/ TAM 2)) (+ y TAM)
-                                               (+ (car child-coords) TAM) (cdr child-coords))
-                                         )
-                                     )
-                                    )
+                        (if (pair? parent-coord) ;Pintamos las lineas hacia el padre, se encargará la parte car
+                            (cond ((eq? tipo 'mcar)
+                                   (if (and (> x (+ (car parent-coord) TAM)) (< y (+ (cdr parent-coord) TAM)))
+                                    (send dc draw-line
+                                          (+ (car parent-coord) TAM ) (+ (cdr parent-coord) (/ TAM 2))
+                                          x (+ y (/ TAM 2)))
+                                    (send dc draw-line
+                                          (+ (car parent-coord) (/ TAM 2)) (+ (cdr parent-coord) TAM)
+                                          (+ x TAM) y))
+                                )
                               )
                             )
                         )
                        )
+                       
+                   
                    ;Cuando no es visible mostramos el indicador para que se expanda
                    (list
                     (send dc draw-rectangle
@@ -206,7 +201,7 @@
 ;Llama al creador de funciones para representar los cambios realizados, calcula las nuevas funciones
 (define (change-detector funcion dc)
   (list-recursion (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") (cdr (funcion dc "ancestors")))
-)
+  )
 
 ;Detector de colisión
 (define (intersectan? coord mouse-click) 
@@ -221,30 +216,51 @@
   )
 
 ;Detecta las colisiones y mutaciones al repintar el canvas
-(define (detecta-colision funciones mouse-click dc)
-  (if (mpair? (mcar funciones))
-      (detector-colisiones-mutaciones funciones mouse-click dc)
-      (let ((funcion (mcar funciones)))
-        (if (funcion dc "cambio") ;Si hay un cambio crea las nuevas funciones y sigue detectando la colisión
-            (detecta-colision (change-detector funcion dc) mouse-click dc)
-            (if (intersectan? (funcion dc "coord") mouse-click) ;Si no, comprueba si hay intersección
-                (if (mpair? ((eval (funcion dc "tipo")) (funcion dc "dato"))) 
-                    ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
-                    (mcons (function-creator (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") 
-                                             (funcion dc "es-dato") (not (funcion dc "visible")) (funcion dc "ancestors"))
-                           (mcdr funciones))
-                    funciones ;Datos simples no se esconden, dejamos la lista tal cual
-                    )
-                (mcons funcion (detector-colisiones-mutaciones (mcdr funciones) mouse-click dc)) ;si no intersecta se deja tal cual y seguimos iterando
+(define (detecta-colision funciones mouse-click dc)     
+  (let ((funcion (mcar funciones)))
+    (if (funcion dc "cambio") ;Si hay un cambio crea las nuevas funciones y sigue detectando la colisión
+        (detecta-colision (change-detector funcion dc) mouse-click dc)
+        (if (intersectan? (funcion dc "coord") mouse-click) ;Si no, comprueba si hay intersección
+            (if (mpair? ((eval (funcion dc "tipo")) (funcion dc "dato"))) 
+                ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
+                (mcons (function-creator (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") 
+                                         (funcion dc "es-dato") (not (funcion dc "visible")) (funcion dc "ancestors"))
+                       (mcdr funciones))
+                funciones ;Datos simples no se esconden, dejamos la lista tal cual
                 )
+            (mcons funcion (detector-colisiones-mutaciones (mcdr funciones) mouse-click dc)) ;si no intersecta se deja tal cual y seguimos iterando
             )
         )
+    )
+  )
+
+(define (detector-drag funciones mouse-click mouse-up dc)
+  (if (mpair? funciones)
+      (if (mpair? (mcar funciones))
+          (if (intersectan? ((mcar (mcar funciones)) dc "coord") mouse-click)
+              (let ((funcion (mcar (mcar funciones))))
+                (list-creator (funcion dc "dato") mouse-up (cdr (funcion dc "ancestors")))
+                )
+              (if (intersectan? ((mcar (mcdr funciones)) dc "coord") mouse-click)
+                  (let ((funcion (mcar (mcdr funciones))))
+                    (list-creator (funcion dc "dato") (cons (- (car mouse-up) TAM) (cdr mouse-up)) (cdr (funcion dc "ancestors")))
+                    )
+                  (mcons (detector-drag (mcar funciones) mouse-click mouse-up dc) 
+                         (detector-drag (mcdr funciones) mouse-click mouse-up dc))
+                  )
+              )
+          (mcons (detector-drag (mcar funciones) mouse-click mouse-up dc) 
+                 (detector-drag (mcdr funciones) mouse-click mouse-up dc))
+          )
+      funciones
       )
   )
 
+;Controla el drag and drop ya que se debe ver a un nivel mas alto para poder mover las dos cajas de la pareja
 (define (detector-colisiones-mutaciones funciones mouse-click dc)
   (if (mpair? funciones)
-      (mcons (detecta-colision (mcar funciones) mouse-click dc) (detecta-colision (mcdr funciones) mouse-click dc))
+      (mcons (detecta-colision (mcar funciones) mouse-click dc) 
+             (detecta-colision (mcdr funciones) mouse-click dc))
       funciones
       )
   )
@@ -279,16 +295,27 @@
     
     (init-field pairs)
     (field (lista-funciones (draw pairs)))
+    (field (click '()))
     
     ;Cuando hacemos click en una caja
     (define/override (on-event e)
-      (if (equal? (send e get-event-type) 'left-down)
-          (let ((my-dc (get-dc)))
-            (send my-dc clear) ;Limpiamos el canvas y tras detectar las colisiones/mutaciones repintamos
-            (set! lista-funciones (detector-colisiones-mutaciones lista-funciones (cons (send e get-x) (send e get-y)) my-dc))
-            (refresh-now)
-            )
-          )
+      (let ((my-dc (get-dc))
+            (event (send e get-event-type)))
+        (cond ((equal? event 'left-down) 
+               (set! click (cons (send e get-x) (send e get-y))))
+              ((equal? event 'left-up)
+               (begin 
+                 (send my-dc clear) ;Limpiamos el canvas y tras detectar las colisiones/mutaciones repintamos
+                 (set! lista-funciones 
+                       (if (equal? (cons (send e get-x) (send e get-y)) click)
+                           (detector-colisiones-mutaciones lista-funciones click my-dc)
+                           (detector-drag lista-funciones click (cons (send e get-x) (send e get-y)) my-dc)
+                           ))
+                 (refresh-now)
+                 )
+               )
+              )
+        )
       )
     
     (define/override (on-paint)
