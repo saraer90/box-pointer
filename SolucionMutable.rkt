@@ -137,7 +137,7 @@
 (define (function-creator pair coord tipo es-dato visible ancestors)
   (let ((x (car coord))
         (y (cdr coord))
-        (parent-coord (if (null? (cdr ancestors)) null (cdadr ancestors)))
+        (parent-coord (if (null? (cdr ancestors)) '() (cdadr ancestors)))
         (old-data (~a ((eval tipo) pair))) ;Guardamos el dato que contiene como cadena para que no nos afecten las mutaciones
         (old-data-reference ((eval tipo) pair))) ;Debug: al mutar la lista con las parejas este dato también muta y no podemos ver el estado anterior 
     (lambda (dc msg)
@@ -234,17 +234,84 @@
     )
   )
 
+(define (detector-colisiones-mutaciones funciones mouse-click dc)
+  (if (mpair? funciones)
+      (mcons (detecta-colision (mcar funciones) mouse-click dc) 
+             (detecta-colision (mcdr funciones) mouse-click dc))
+      funciones
+      )
+  )
+
+;Eventos de drag and drop
+(define (function-coord-updater funciones coord dc)
+  (if (mpair? funciones)
+      (coord-updater funciones coord dc)
+      (let ((funcion funciones)
+             (orig-coord (funciones dc "coord"))
+             (ancestors (funciones dc "ancestors")))
+         (let ((new-coord (cons (- (car orig-coord) (car coord)) (- (cdr orig-coord) (cdr coord)))))
+           (function-creator (funcion dc "dato") new-coord (funcion dc "tipo") (funcion dc "es-dato") (funcion dc "visible") 
+                             (cons (cons (caar ancestors) new-coord) (cdr ancestors))
+           )
+         )
+      )
+   )
+)
+
+(define (function-child-coord-updater funciones coord dc)
+  (if (mpair? funciones)
+      (child-coord-updater funciones coord dc)
+      (let ((funcion funciones)
+            (orig-coord (funciones dc "coord"))
+            (ancestors (funciones dc "ancestors")))
+        (function-creator (funcion dc "dato") (cons (- (car orig-coord) (car coord)) (- (cdr orig-coord) (cdr coord)))
+                                 (funcion dc "tipo") (funcion dc "es-dato") (funcion dc "visible") 
+                                 (cons (cons (caar ancestors)
+                                             (cons (- (cadar ancestors) (car coord)) 
+                                                   (- (cddar ancestors) (cdr coord))) 
+                                        ) 
+                                        (cons (cons (caadr ancestors)
+                                                   (cons (- (cadadr ancestors) (car coord)) 
+                                                         (- (cddadr ancestors) (cdr coord))) 
+                                             )
+                                             (cddr ancestors)
+                                        )
+                                 )
+        )
+      )
+   )
+)
+
+(define (child-coord-updater funciones coord dc)
+   (if (mpair? funciones)
+      (mcons (function-child-coord-updater (mcar funciones) coord dc) (function-child-coord-updater (mcdr funciones) coord dc))
+      (function-child-coord-updater funciones coord dc)
+   )
+)
+
+(define (coord-updater funciones coord dc)
+  (if (mpair? funciones)
+      (mcons (function-coord-updater (mcar funciones) coord dc) (child-coord-updater (mcdr funciones) coord dc))
+      (function-coord-updater funciones coord dc)
+  )
+)
+
+;Controla el drag and drop ya que se debe ver a un nivel mas alto para poder mover las dos cajas de la pareja
 (define (detector-drag funciones mouse-click mouse-up dc)
   (if (mpair? funciones)
       (if (mpair? (mcar funciones))
           (if (intersectan? ((mcar (mcar funciones)) dc "coord") mouse-click)
               (let ((funcion (mcar (mcar funciones))))
-                (list-creator (funcion dc "dato") mouse-up (cdr (funcion dc "ancestors")))
+                (let ((coord (funcion dc "coord")))
+                  (coord-updater funciones (cons (- (car coord) (car mouse-up)) (- (cdr coord) (cdr mouse-up))) dc)
                 )
+              )
               (if (intersectan? ((mcar (mcdr funciones)) dc "coord") mouse-click)
                   (let ((funcion (mcar (mcdr funciones))))
-                    (list-creator (funcion dc "dato") (cons (- (car mouse-up) TAM) (cdr mouse-up)) (cdr (funcion dc "ancestors")))
+                    (let ((coord (funcion dc "coord")))
+                      (coord-updater funciones (cons (- (- (car coord) (car mouse-up) TAM)) (- (cdr coord) (cdr mouse-up))) dc)
                     )
+                   )
                   (mcons (detector-drag (mcar funciones) mouse-click mouse-up dc) 
                          (detector-drag (mcdr funciones) mouse-click mouse-up dc))
                   )
@@ -255,16 +322,6 @@
       funciones
       )
   )
-
-;Controla el drag and drop ya que se debe ver a un nivel mas alto para poder mover las dos cajas de la pareja
-(define (detector-colisiones-mutaciones funciones mouse-click dc)
-  (if (mpair? funciones)
-      (mcons (detecta-colision (mcar funciones) mouse-click dc) 
-             (detecta-colision (mcdr funciones) mouse-click dc))
-      funciones
-      )
-  )
-
 
 ;Pinta la lista de funciones llamando a dibuja
 ;Si encuentra una caja no visible deja de iterar y no pinta sus hijos
