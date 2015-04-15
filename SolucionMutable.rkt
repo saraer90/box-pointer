@@ -9,8 +9,8 @@
 ;Creación de la lista de funciones: visible siempre a true en el inicio
 ;Añade margen superior e izquierdo para poder dibujar las lineas de los ciclos en caso de que fuese necesario
 (define (draw list) (list-creator list (if (mlist? list)
-                                           (cons CYCLE-MARGIN CYCLE-MARGIN)
-                                           (cons (+ (* MARGEN (car-levels list)) CYCLE-MARGIN) CYCLE-MARGIN)) '()))
+                                           (mcons CYCLE-MARGIN CYCLE-MARGIN)
+                                           (mcons (+ (* MARGEN (car-levels list)) CYCLE-MARGIN) CYCLE-MARGIN)) '()))
 
 ;Calcula cuantos niveles hay en cuanto a la parte car de las parejas, para calcular el margen izquierdo
 (define (car-levels list)
@@ -28,7 +28,7 @@
 (define (list-creator pair coord ancestors)
   (if (mpair? pair)
       (mcons (list-recursion pair coord 'mcar ancestors) 
-             (list-recursion pair (cons (+ (car coord) TAM) (cdr coord)) 'mcdr ancestors) 
+             (list-recursion pair (mcons (+ (mcar coord) TAM) (mcdr coord)) 'mcdr ancestors) 
              )
       )
   )
@@ -54,16 +54,16 @@
 ;Calcula la posición de la siguiente caja
 (define (coord-locator data coord type)
   (if (mpair? data)
-      (let ((x (car coord))
-            (y (cdr coord)))
+      (let ((x (mcar coord))
+            (y (mcdr coord)))
         (if (mlist? data)
-            (cond ((eq? type 'mcar) (cons x (+ MARGEN y)))  ;Cuando se trate de una lista descendemos verticalmente en linea en caso de car
-                  ((eq? type 'mcdr) (cons (+ MARGEN x) y))  ;y si es cdr lo haremos horizontalmente hacia la derecha
+            (cond ((eq? type 'mcar) (mcons x (+ MARGEN y)))  ;Cuando se trate de una lista descendemos verticalmente en linea en caso de car
+                  ((eq? type 'mcdr) (mcons (+ MARGEN x) y))  ;y si es cdr lo haremos horizontalmente hacia la derecha
                   )
             (cond ((eq? type 'mcar) 
-                   (if (mpair? (mcdr data)) (cons (- x MARGEN) (+ MARGEN y)) (cons (- x (/ TAM 2)) (+ MARGEN y))))
+                   (if (mpair? (mcdr data)) (mcons (- x MARGEN) (+ MARGEN y)) (mcons (- x (/ TAM 2)) (+ MARGEN y))))
                   ((eq? type 'mcdr)
-                   (if (mpair? (mcar data)) (cons (+ (/ MARGEN 2) x) (+ MARGEN y)) (cons (- x (/ TAM 2)) (+ MARGEN y))))
+                   (if (mpair? (mcar data)) (mcons (+ (/ MARGEN 2) x) (+ MARGEN y)) (mcons (- x (/ TAM 2)) (+ MARGEN y))))
                   ) ;Si no tenemos una lista, comprobaremos que tipo de dato hay en la otra parte de la pareja
             )       ;si tambien es una pareja pondremos las flechas en diagonal, si no en vertical
         )
@@ -85,48 +85,43 @@
 
 ;Pinta linea de bucles
 ;Final de la linea
-(define (draw-cycle-ending coord cycle dc last-coord)
-  (let ((x (car coord))
-        (y (cdr coord)))
-    (if (> x (car cycle))
-        (send dc draw-line
-              (- x CYCLE-MARGIN) (- (cdr cycle) CYCLE-MARGIN)
-              (+ (cadr cycle) TAM) (- (cdr cycle) CYCLE-MARGIN))
-        (send dc draw-line
-              (+ (car cycle) TAM) (- (cdr cycle) CYCLE-MARGIN)
-              (+ (car cycle) TAM) (cdr cycle)) 
-        )
+(define (draw-cycle-ending coord cycle dc)
+  (let ((x-origin (car coord))
+        (y-origin (cdr coord))
+        (x-dest (mcar cycle))
+        (y-dest (mcdr cycle)))
+    (send dc draw-line
+          x-origin y-origin
+          x-origin (- y-dest CYCLE-MARGIN))
+    (send dc draw-line
+          x-origin (- y-dest CYCLE-MARGIN)
+          x-dest (- y-dest CYCLE-MARGIN))
+    (send dc draw-line
+          x-dest (- y-dest CYCLE-MARGIN)
+          x-dest y-dest)
     )
   )
 
 ;Inicio de la linea
 (define (draw-cycle coord tipo cycle dc)
   (let ((original-pen (send dc get-pen))
-        (x (car coord))
-        (y (cdr coord)))
+        (x-origin (mcar coord))
+        (y-origin (mcdr coord))
+        (x-dest (mcar cycle))
+        (y-dest (mcdr cycle))
+        )
     (send dc set-pen (new pen% [color "red"])) ;[style 'long-dash]
     (if (eq? tipo 'mcdr)
-        (list (send dc draw-line
-                    (+ x TAM) (+ y (/ TAM 2))
-                    (+ (+ x TAM) CYCLE-MARGIN) (+ y (/ TAM 2)))
-              (send dc draw-line
-                    (+ (+ x TAM) CYCLE-MARGIN) (+ y (/ TAM 2))
-                    (+ (+ x TAM) CYCLE-MARGIN) (- (cdr cycle) CYCLE-MARGIN))
-              (send dc draw-line
-                    (+ (+ x TAM) CYCLE-MARGIN) (- (cdr cycle) CYCLE-MARGIN)
-                    (car cycle) (- (cdr cycle) CYCLE-MARGIN))
-              (send dc draw-line
-                    (car cycle) (- (cdr cycle) CYCLE-MARGIN)
-                    (car cycle)(cdr cycle))
-              )
-        (list (send dc draw-line
-                    x (+ y (/ TAM 2))
-                    (- x CYCLE-MARGIN) (+ y (/ TAM 2)))
-              (send dc draw-line
-                    (- x CYCLE-MARGIN) (+ y (/ TAM 2))
-                    (- x CYCLE-MARGIN) (- (cdr cycle) CYCLE-MARGIN))
-              (draw-cycle-ending coord cycle dc)
-              )
+        (begin (send dc draw-line
+                     (+ x-origin TAM) (+ y-origin (/ TAM 2)) ;Start at box' right-center
+                     (+ (+ x-origin TAM) CYCLE-MARGIN) (+ y-origin (/ TAM 2)))
+               (draw-cycle-ending (cons (+ (+ x-origin TAM) CYCLE-MARGIN) (+ y-origin (/ TAM 2))) cycle dc)
+               )
+        (begin (send dc draw-line
+                     x-origin (+ y-origin (/ TAM 2))  ;Start at box' left-center
+                     (- x-origin CYCLE-MARGIN) (+ y-origin (/ TAM 2)))
+               (draw-cycle-ending (cons (- x-origin CYCLE-MARGIN) (+ y-origin (/ TAM 2))) cycle dc)
+               )
         )
     ;Common
     (send dc set-pen original-pen)
@@ -135,11 +130,8 @@
 
 ;Creador de funciones
 (define (function-creator pair coord tipo es-dato visible ancestors)
-  (let ((x (car coord))
-        (y (cdr coord))
-        (parent-coord (if (null? (cdr ancestors)) '() (cdadr ancestors)))
-        (old-data (~a ((eval tipo) pair))) ;Guardamos el dato que contiene como cadena para que no nos afecten las mutaciones
-        (old-data-reference ((eval tipo) pair))) ;Debug: al mutar la lista con las parejas este dato también muta y no podemos ver el estado anterior 
+  (let ((parent-coord (if (null? (cdr ancestors)) '() (cdadr ancestors)))
+        (old-data (~a ((eval tipo) pair)))) ;Guardamos el dato que contiene como cadena para que no nos afecten las mutaciones
     (lambda (dc msg)
       (cond ((string=? msg "dato") pair)
             ((string=? msg "cambio") (not (equal? old-data (~a ((eval tipo) pair))))) ;Para saber si ha habido una mutación comparamos con la cadena anterior
@@ -150,45 +142,35 @@
             ((string=? msg "es-dato") es-dato)
             ((string=? msg "ancestors") ancestors)
             ((string=? msg "dibuja")
-             (let ((dato ((eval tipo) pair))
+             (let ((x (mcar coord))
+                   (y (mcdr coord))
+                   (dato ((eval tipo) pair))
                    (cycle (cycle-finder ((eval tipo) pair) ancestors)))
-               (if visible
-                   (if es-dato
-                       (if (car cycle) 
-                           ;Si en vez de dato tenemos un ciclo, debemos pintar la linea
-                           (if (eq? tipo 'mcar)
-                               (draw-cycle coord tipo (cons (+ (cadr cycle) TAM) (cddr cycle)) dc) ;Si es de tipo car tenemos que poner la X final
-                               (draw-cycle coord tipo (cdr cycle) dc)                              ;En la mitad del car y el cdr
-                               )
-                           (send dc draw-text (~a dato) (+ x PADDING) (+ y PADDING)) ;Dato simple
+               (if es-dato
+                   (if (car cycle) 
+                       ;Si en vez de dato tenemos un ciclo, debemos pintar la linea
+                       (draw-cycle coord tipo (cdr cycle) dc)                              
+                       (send dc draw-text (~a dato) (+ x PADDING) (+ y PADDING)) ;Dato simple
                        )
-                       (list 
-                        (send dc draw-rectangle
-                              x y       ; Top-left at (x, y), y pixels down from top-left
-                              TAM TAM)  ; wide and high
-                        (if (pair? parent-coord) ;Pintamos las lineas hacia el padre, se encargará la parte car
-                            (cond ((eq? tipo 'mcar)
-                                   (if (and (> x (+ (car parent-coord) TAM)) (< y (+ (cdr parent-coord) TAM)))
-                                    (send dc draw-line
-                                          (+ (car parent-coord) TAM ) (+ (cdr parent-coord) (/ TAM 2))
-                                          x (+ y (/ TAM 2)))
-                                    (send dc draw-line
-                                          (+ (car parent-coord) (/ TAM 2)) (+ (cdr parent-coord) TAM)
-                                          (+ x TAM) y))
-                                )
-                              )
-                            )
-                        )
-                       )
-                       
-                   
-                   ;Cuando no es visible mostramos el indicador para que se expanda
-                   (list
-                    (send dc draw-rectangle
-                          x y       
-                          TAM TAM)  
-                    (send dc draw-text (~a "+") (+ x PADDING) (+ y PADDING))
-                    )
+                   (begin 
+                     (send dc draw-rectangle
+                           x y       ; Top-left at (x, y), y pixels down from top-left
+                           TAM TAM)  ; wide and high
+                     (if (and (mpair? parent-coord) (eq? tipo 'mcar)) ;Pintamos las lineas hacia el padre, se encargará la parte car
+                         (if (and (> x (+ (mcar parent-coord) TAM)) (< y (+ (mcdr parent-coord) TAM)))
+                             (send dc draw-line
+                                   (+ (mcar parent-coord) TAM ) (+ (mcdr parent-coord) (/ TAM 2))
+                                   x (+ y (/ TAM 2)))
+                             (send dc draw-line
+                                   (+ (mcar parent-coord) (/ TAM 2)) (+ (mcdr parent-coord) TAM)
+                                   (+ x TAM) y)
+                             )
+                         )   
+                     (if (not visible)
+                         ;Cuando no es visible mostramos el indicador para que se expanda
+                         (send dc draw-text (~a "+") (+ x PADDING) (+ y PADDING))
+                         )
+                     )
                    )
                )
              )
@@ -205,10 +187,10 @@
 
 ;Detector de colisión
 (define (intersectan? coord mouse-click) 
-  (let ((x-ini (car coord))
-        (y-ini (cdr coord))
-        (x-fin (+ (car coord) TAM))
-        (y-fin (+ (cdr coord) TAM))
+  (let ((x-ini (mcar coord))
+        (y-ini (mcdr coord))
+        (x-fin (+ (mcar coord) TAM))
+        (y-fin (+ (mcdr coord) TAM))
         (x-click (car mouse-click))
         (y-click (cdr mouse-click)))
     (and (<= x-ini x-click) (<= y-ini y-click) (>= x-fin x-click) (>= y-fin y-click))
@@ -243,81 +225,37 @@
   )
 
 ;Eventos de drag and drop
-(define (function-coord-updater funciones coord dc)
+(define (function-coord-updater funciones difference dc)
   (if (mpair? funciones)
-      (coord-updater funciones coord dc)
-      (let ((funcion funciones)
-             (orig-coord (funciones dc "coord"))
-             (ancestors (funciones dc "ancestors")))
-         (let ((new-coord (cons (- (car orig-coord) (car coord)) (- (cdr orig-coord) (cdr coord)))))
-           (function-creator (funcion dc "dato") new-coord (funcion dc "tipo") (funcion dc "es-dato") (funcion dc "visible") 
-                             (cons (cons (caar ancestors) new-coord) (cdr ancestors))
-           )
-         )
+      (coord-updater funciones difference dc)
+      (if (funciones dc "es-dato")
+          funciones
+          (let ((orig-coord (funciones dc "coord")))
+            (begin (set-mcar! orig-coord (+ (mcar orig-coord) (car difference))) 
+                   (set-mcdr! orig-coord (+ (mcdr orig-coord) (cdr difference)))
+                   funciones
+            )
+          )
       )
-   )
-)
-
-(define (function-child-coord-updater funciones coord dc)
-  (if (mpair? funciones)
-      (child-coord-updater funciones coord dc)
-      (let ((funcion funciones)
-            (orig-coord (funciones dc "coord"))
-            (ancestors (funciones dc "ancestors")))
-        (function-creator (funcion dc "dato") (cons (- (car orig-coord) (car coord)) (- (cdr orig-coord) (cdr coord)))
-                                 (funcion dc "tipo") (funcion dc "es-dato") (funcion dc "visible") 
-                                 (cons (cons (caar ancestors)
-                                             (cons (- (cadar ancestors) (car coord)) 
-                                                   (- (cddar ancestors) (cdr coord))) 
-                                        ) 
-                                        (cons (cons (caadr ancestors)
-                                                   (cons (- (cadadr ancestors) (car coord)) 
-                                                         (- (cddadr ancestors) (cdr coord))) 
-                                             )
-                                             (cddr ancestors)
-                                        )
-                                 )
-        )
-      )
-   )
-)
-
-(define (child-coord-updater funciones coord dc)
-   (if (mpair? funciones)
-      (mcons (function-child-coord-updater (mcar funciones) coord dc) (function-child-coord-updater (mcdr funciones) coord dc))
-      (function-child-coord-updater funciones coord dc)
-   )
-)
-
-(define (coord-updater funciones coord dc)
-  (if (mpair? funciones)
-      (mcons (function-coord-updater (mcar funciones) coord dc) (child-coord-updater (mcdr funciones) coord dc))
-      (function-coord-updater funciones coord dc)
   )
 )
 
-;Controla el drag and drop ya que se debe ver a un nivel mas alto para poder mover las dos cajas de la pareja
-(define (detector-drag funciones mouse-click mouse-up dc)
+(define (coord-updater funciones difference dc)
   (if (mpair? funciones)
-      (if (mpair? (mcar funciones))
-          (if (intersectan? ((mcar (mcar funciones)) dc "coord") mouse-click)
-              (let ((funcion (mcar (mcar funciones))))
-                (let ((coord (funcion dc "coord")))
-                  (coord-updater funciones (cons (- (car coord) (car mouse-up)) (- (cdr coord) (cdr mouse-up))) dc)
-                )
-              )
-              (if (intersectan? ((mcar (mcdr funciones)) dc "coord") mouse-click)
-                  (let ((funcion (mcar (mcdr funciones))))
-                    (let ((coord (funcion dc "coord")))
-                      (coord-updater funciones (cons (- (- (car coord) (car mouse-up) TAM)) (- (cdr coord) (cdr mouse-up))) dc)
-                    )
-                   )
-                  (mcons (detector-drag (mcar funciones) mouse-click mouse-up dc) 
-                         (detector-drag (mcdr funciones) mouse-click mouse-up dc))
-                  )
-              )
-          (mcons (detector-drag (mcar funciones) mouse-click mouse-up dc) 
-                 (detector-drag (mcdr funciones) mouse-click mouse-up dc))
+      (mcons (function-coord-updater (mcar funciones) difference dc) (function-coord-updater (mcdr funciones) difference dc))
+      (function-coord-updater funciones difference dc)
+      )
+  )
+
+;Controla el drag and drop ya que se debe ver a un nivel mas alto para poder mover las dos cajas de la pareja
+(define (detector-drag funciones mouse-click difference dc)
+  (if (mpair? funciones)
+      (if (and (mpair? (mcar funciones))
+               (or (intersectan? ((mcar (mcar funciones)) dc "coord") mouse-click)
+                   (intersectan? ((mcar (mcdr funciones)) dc "coord") mouse-click)))
+          (coord-updater funciones difference dc)
+          (mcons (detector-drag (mcar funciones) mouse-click difference dc) 
+                 (detector-drag (mcdr funciones) mouse-click difference dc))
           )
       funciones
       )
@@ -366,7 +304,9 @@
                  (set! lista-funciones 
                        (if (equal? (cons (send e get-x) (send e get-y)) click)
                            (detector-colisiones-mutaciones lista-funciones click my-dc)
-                           (detector-drag lista-funciones click (cons (send e get-x) (send e get-y)) my-dc)
+                           (detector-drag lista-funciones click 
+                                          (cons (- (send e get-x) (car click))
+                                                (- (send e get-y) (cdr click))) my-dc)
                            ))
                  (refresh-now)
                  )
@@ -386,7 +326,7 @@
 ;PRUEBAS
 (define lista-parejas (mcons (mcons 'a (mcons (mlist 1 2) 'b)) (mcons 1 2)))
 ;(set-mcdr! (mcar lista-parejas) (mcar lista-parejas))
-;(set-mcdr! (mcdr lista-parejas) lista-parejas)
+(set-mcar! (mcdr lista-parejas) lista-parejas)
 
 ;(define lista-parejas (mcons 1 2))
 ;(set-mcdr! lista-parejas lista-parejas)
