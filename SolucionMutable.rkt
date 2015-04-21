@@ -191,8 +191,8 @@
         (y-ini (mcdr coord))
         (x-fin (+ (mcar coord) TAM))
         (y-fin (+ (mcdr coord) TAM))
-        (x-click (car mouse-click))
-        (y-click (cdr mouse-click)))
+        (x-click (mcar mouse-click))
+        (y-click (mcdr mouse-click)))
     (and (<= x-ini x-click) (<= y-ini y-click) (>= x-fin x-click) (>= y-fin y-click))
     )
   )
@@ -221,6 +221,25 @@
       (mcons (detecta-colision (mcar funciones) mouse-click dc) 
              (detecta-colision (mcdr funciones) mouse-click dc))
       funciones
+      )
+  )
+
+
+;Detecta las colisiones y añade los hijos nuevos
+(define (find-collision funciones mouse-click dc)     
+  (let ((funcion (mcar funciones)))
+    (if (intersectan? (funcion dc "coord") mouse-click)
+        (mlist funciones)
+        (collision-handler (mcdr funciones) mouse-click dc)
+    )
+  )
+)
+
+(define (collision-handler funciones mouse-click dc)
+  (if (mpair? funciones)
+      (mappend (find-collision (mcar funciones) mouse-click dc) 
+              (find-collision (mcdr funciones) mouse-click dc))
+      '()
       )
   )
 
@@ -297,17 +316,30 @@
       (let ((my-dc (get-dc))
             (event (send e get-event-type)))
         (cond ((equal? event 'left-down) 
-               (set! click (cons (send e get-x) (send e get-y))))
+               (set! click (mcons (send e get-x) (send e get-y))))
               ((equal? event 'left-up)
                (begin 
                  (send my-dc clear) ;Limpiamos el canvas y tras detectar las colisiones/mutaciones repintamos
-                 (set! lista-funciones 
-                       (if (equal? (cons (send e get-x) (send e get-y)) click)
-                           (detector-colisiones-mutaciones lista-funciones click my-dc)
-                           (detector-drag lista-funciones click 
-                                          (cons (- (send e get-x) (car click))
-                                                (- (send e get-y) (cdr click))) my-dc)
-                           ))
+                 
+                 (if (equal? (mcons (send e get-x) (send e get-y)) click)
+                     ;Click contraer: (detector-colisiones-mutaciones lista-funciones click my-dc)
+                     (let ((box-selected (collision-handler lista-funciones click my-dc)))
+                       (if (empty? box-selected) 
+                           (set! lista-funciones (list-creator (mcons '() '()) click '()))
+                           (let ((funciones (mcar box-selected))
+                                 (funcion (mcar (mcar box-selected))))
+                              (set-mcar! funciones (function-creator (mcons '() '()) (funcion my-dc "coord") (funcion my-dc "tipo") 
+                                                    #f (funcion my-dc "visible") (funcion my-dc "ancestors")))
+                              (set-mcdr! funciones (list-creator (mcons '() '()) (coord-locator  (mcons '() '()) (funcion my-dc "coord") (funcion my-dc "tipo")) (funcion my-dc "ancestors")))
+                            
+                             )
+                           )
+                       )
+                     (set! lista-funciones  (detector-drag lista-funciones click 
+                                                           (cons (- (send e get-x) (mcar click))
+                                                                 (- (send e get-y) (mcdr click))) my-dc))
+                     )
+                 
                  (refresh-now)
                  )
                )
@@ -326,7 +358,7 @@
 ;PRUEBAS
 (define lista-parejas (mcons (mcons 'a (mcons (mlist 1 2) 'b)) (mcons 1 2)))
 ;(set-mcdr! (mcar lista-parejas) (mcar lista-parejas))
-(set-mcar! (mcdr lista-parejas) lista-parejas)
+;(set-mcar! (mcdr lista-parejas) lista-parejas)
 
 ;(define lista-parejas (mcons 1 2))
 ;(set-mcdr! lista-parejas lista-parejas)
