@@ -1,0 +1,1 @@
+("6.1" ("b1cd19954114dc8a271db2056b44bf560a2b7f92" . "4dcb2637543830fa48b6669c06f4a7e72c56ee75") #"D:\\GitHub\\box-pointer\\lib\\settings.rkt" (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))

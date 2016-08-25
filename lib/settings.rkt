@@ -1,10 +1,10 @@
 #lang racket
-(provide TAM)
-(provide MARGEN)
+(provide SIZE)
+(provide MARGIN)
 (provide PADDING)
 (provide CYCLE-MARGIN)
 
-(define TAM 30)
-(define MARGEN (+ 20 TAM))
+(define SIZE 30)
+(define MARGIN (+ 20 SIZE))
 (define PADDING 5)
 (define CYCLE-MARGIN 5)

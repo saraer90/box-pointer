@@ -6,20 +6,22 @@
 (require "lib/utils.rkt")
 (require "lib/settings.rkt")
 (require "lib/coordinates.rkt")
+(require "lib/draw.rkt")
 
 ;Creación de la lista de funciones: visible siempre a true en el inicio
 ;Añade margen superior e izquierdo para poder dibujar las lineas de los ciclos en caso de que fuese necesario
-(define (draw list) (list-creator list (if (mlist? list)
-                                           (create-coord CYCLE-MARGIN CYCLE-MARGIN)
-                                           (create-coord (+ (* MARGEN (car-levels list)) CYCLE-MARGIN) CYCLE-MARGIN)) '()))
+;Si no es una lista mira los niveles de car para añadir margen a la izquierda y todo el gráfico sea visible.
+(define (draw list) (list-creator list (new-coord (+ (* MARGIN (car-levels list)) CYCLE-MARGIN) CYCLE-MARGIN) '()))
 
 ;Calcula cuantos niveles hay en cuanto a la parte car de las parejas, para calcular el margen izquierdo
 (define (car-levels list)
   (count-car-levels list -1 '())
   )
 
+;;Debe ser un pair, si es una lista dejamos de contar ya que se dibujará hacia la derecha.
+;;Además si se encuentra un ciclo también se dejara de contar.
 (define (count-car-levels list levels ancestors)
-  (if (and (mpair? list) (not (mlist? list)) (not (car (cycle-finder list ancestors))))
+  (if (and (mpair? list) (not (car (cycle-finder list ancestors))))
       (count-car-levels (mcar list) (+ levels 1) (cons (cons list ancestors) '())) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
       levels
       )
@@ -29,7 +31,7 @@
 (define (list-creator pair coord ancestors)
   (if (mpair? pair)
       (mcons (list-recursion pair coord 'mcar ancestors) 
-             (list-recursion pair (move-coord coord TAM 0) 'mcdr ancestors) 
+             (list-recursion pair (move-coord coord SIZE 0) 'mcdr ancestors) 
              )
       )
   )
@@ -55,22 +57,30 @@
 ;Calcula la posición de la siguiente caja
 (define (coord-locator data coord type)
   (if (mpair? data)
-      (let ((x (get-x coord))
-            (y (get-y coord)))
-        (if (mlist? data)
-            (cond ((eq? type 'mcar) (move-coord coord 0 MARGEN))  ;Cuando se trate de una lista descendemos verticalmente en linea en caso de car
-                  ((eq? type 'mcdr) (move-coord coord MARGEN 0))  ;y si es cdr lo haremos horizontalmente hacia la derecha
+        (if (mlist? ((eval type) data))
+            (cond ((eq? type 'mcar) (move-coord coord (- MARGIN) MARGIN))  ;Para la parte car bajaremos en diagonal
+                  ((eq? type 'mcdr) (move-coord coord MARGIN 0))  ;y si es cdr lo haremos horizontalmente hacia la derecha
                   )
             (cond ((eq? type 'mcar) 
-                   (if (mpair? (mcdr data)) (mcons (- x MARGEN) (+ MARGEN y)) (mcons (- x (/ TAM 2)) (+ MARGEN y))))
+                   (if (mpair? (mcdr data))
+                       (move-coord coord (- MARGIN) MARGIN) ;Car baja en diagonal
+                       (move-coord coord (- (/ SIZE 2)) MARGIN) ;Si es un dato, bajamos en vertical
+                   ))
                   ((eq? type 'mcdr)
-                   (if (mpair? (mcar data)) (move-coord coord (/ MARGEN 2) MARGEN) (mcons (- x (/ TAM 2)) (+ MARGEN y))))
+                   (if (mpair? (mcar data))
+                       (if (mlist? (mcar data))
+                           (move-coord coord (- (/ SIZE 2)) (* 2 MARGIN)) ;nos quedamos en horizontal pero nos movemos el doble en la y
+                           (move-coord coord (/ MARGIN 2) MARGIN) 
+                       )
+                       (move-coord coord (- (/ SIZE 2)) MARGIN)
+                   )
                   ) ;Si no tenemos una lista, comprobaremos que tipo de dato hay en la otra parte de la pareja
-            )       ;si tambien es una pareja pondremos las flechas en diagonal, si no en vertical
-        )
+             )       ;si tambien es una pareja pondremos las flechas en diagonal, si no en vertical
+          ) 
       coord ;En caso de ser un dato simple dejamos la coordenada igual que la de la caja que lo contiene
       )
   )
+
 
 ;Busca bucles según una lista de antecesores
 ;En la primera parte de la pareja tenemos el elemento y en el cdr la coordenada
@@ -82,51 +92,6 @@
           (cycle-finder pair (cdr ancestors))
           )
       )
-  )
-
-;Pinta linea de bucles
-;Final de la linea
-(define (draw-cycle-ending coord cycle dc)
-  (let ((x-origin (get-x coord))
-        (y-origin (get-y coord))
-        (x-dest (get-x cycle))
-        (y-dest (get-y cycle)))
-    (send dc draw-line
-          x-origin y-origin
-          x-origin (- y-dest CYCLE-MARGIN))
-    (send dc draw-line
-          x-origin (- y-dest CYCLE-MARGIN)
-          x-dest (- y-dest CYCLE-MARGIN))
-    (send dc draw-line
-          x-dest (- y-dest CYCLE-MARGIN)
-          x-dest y-dest)
-    )
-  )
-
-;Inicio de la linea
-(define (draw-cycle coord tipo cycle dc)
-  (let ((original-pen (send dc get-pen))
-        (x-origin (get-x coord))
-        (y-origin (get-y coord))
-        (x-dest (get-x cycle))
-        (y-dest (get-y cycle))
-        )
-    (send dc set-pen (new pen% [color "red"])) ;[style 'long-dash]
-    (if (eq? tipo 'mcdr)
-        (begin (send dc draw-line
-                     (+ x-origin TAM) (+ y-origin (/ TAM 2)) ;Start at box' right-center
-                     (+ (+ x-origin TAM) CYCLE-MARGIN) (+ y-origin (/ TAM 2)))
-               (draw-cycle-ending (move-coord coord (+ TAM CYCLE-MARGIN) (/ TAM 2)) cycle dc)
-               )
-        (begin (send dc draw-line
-                     x-origin (+ y-origin (/ TAM 2))  ;Start at box' left-center
-                     (- x-origin CYCLE-MARGIN) (+ y-origin (/ TAM 2)))
-               (draw-cycle-ending (cons (- x-origin CYCLE-MARGIN) (+ y-origin (/ TAM 2))) cycle dc)
-               )
-        )
-    ;Common
-    (send dc set-pen original-pen)
-    )
   )
 
 ;Creador de funciones
@@ -156,15 +121,15 @@
                    (begin 
                      (send dc draw-rectangle
                            x y       ; Top-left at (x, y), y pixels down from top-left
-                           TAM TAM)  ; wide and high
+                           SIZE SIZE)  ; wide and high
                      (if (and (mpair? parent-coord) (eq? tipo 'mcar)) ;Pintamos las lineas hacia el padre, se encargará la parte car
-                         (if (and (> x (+ (mcar parent-coord) TAM)) (< y (+ (mcdr parent-coord) TAM)))
+                         (if (and (> x (+ (mcar parent-coord) SIZE)) (< y (+ (mcdr parent-coord) SIZE)))
                              (send dc draw-line
-                                   (+ (mcar parent-coord) TAM ) (+ (mcdr parent-coord) (/ TAM 2))
-                                   x (+ y (/ TAM 2)))
+                                   (+ (mcar parent-coord) SIZE ) (+ (mcdr parent-coord) (/ SIZE 2))
+                                   x (+ y (/ SIZE 2)))
                              (send dc draw-line
-                                   (+ (mcar parent-coord) (/ TAM 2)) (+ (mcdr parent-coord) TAM)
-                                   (+ x TAM) y)
+                                   (+ (mcar parent-coord) (/ SIZE 2)) (+ (mcdr parent-coord) SIZE)
+                                   (+ x SIZE) y)
                              )
                          )   
                      (if (not visible)
@@ -214,33 +179,34 @@
   )
 
 
-;Detecta las colisiones y añade los hijos nuevos TODO:DELETE
-(define (find-collision funciones mouse-click dc)     
-  (let ((funcion (mcar funciones)))
-    (if (intersectan? (funcion dc "coord") mouse-click)
-        (mlist funciones)
-        (collision-handler (mcdr funciones) mouse-click dc)
+;Callbacks de cada modo de trabajo
+
+;Contract and expand
+(define (contract-expand funciones entire-list click dc)
+  (if (not (eq? funciones #f)) 
+    (let ((funcion (mcar funciones)))
+      (if (mpair? ((eval (funcion dc "tipo")) (funcion dc "dato"))) 
+          ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
+          (set! funciones (mcons (function-creator (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") 
+                                   (funcion dc "es-dato") (not (funcion dc "visible")) (funcion dc "ancestors"))
+                           (mcdr funciones)))
+          ;Datos simples no se esconden, dejamos la lista tal cual
+      )
     )
   )
 )
 
-(define (collision-handler funciones mouse-click dc)
-  (if (mpair? funciones)
-      (mappend (find-collision (mcar funciones) mouse-click dc) 
-              (find-collision (mcdr funciones) mouse-click dc))
-      '()
-      )
-  )
-
-
 ;Añade un hijo vacío a una caja
-(define (add-child funciones my-dc)
-  (let ((funcion (mcar funciones)))
-    (set-mcar! funciones (function-creator (mcons '() '()) (funcion my-dc "coord") (funcion my-dc "tipo") 
-                                           #f (funcion my-dc "visible") (funcion my-dc "ancestors")))
-    (set-mcdr! funciones (list-creator (mcons '() '()) (coord-locator  (mcons '() '()) (funcion my-dc "coord") (funcion my-dc "tipo")) (funcion my-dc "ancestors")))
+(define (add-child funciones entire-list click my-dc)
+  (if (eq? funciones #f) 
+       (set! entire-list (list-creator (mcons '() '()) click '()))
+       (let ((funcion (mcar funciones)))
+         (set-mcar! funciones (function-creator (mcons '() '()) (funcion my-dc "coord") (funcion my-dc "tipo") 
+                                                #f (funcion my-dc "visible") (funcion my-dc "ancestors")))
+         (set-mcdr! funciones (list-creator (mcons '() '()) (coord-locator  (mcons '() '()) (funcion my-dc "coord") (funcion my-dc "tipo")) (funcion my-dc "ancestors")))
+       )
   )
-)
+)       
 
 ;Busca la ruta al hijo
 (define (find-route-branch funciones mouse-click dc)     
@@ -271,6 +237,28 @@
   )
 )
 
+;Busca el elemento sobre el que hemos hecho click
+(define (recursive-search funciones mouse-click dc)     
+  (let ((funcion (mcar funciones)))
+    (if (intersect? (funcion dc "coord") mouse-click)
+        funciones
+        (search-selected-pair (mcdr funciones) mouse-click dc)
+    )
+  )
+)
+
+(define (search-selected-pair funciones mouse-click dc)
+  (if (mpair? funciones)
+      (let ((search-cdr (recursive-search (mcdr funciones) mouse-click dc)))
+        (if (eq? search-cdr #f)
+            (recursive-search (mcar funciones) mouse-click dc)
+        )
+      )
+      #f
+  )
+)
+
+;Aplica el evento al hijo según su ruta
 (define (get-pair-by-route funciones route)
   (if (or (empty? route) (empty? (cdr route)))
       funciones
@@ -278,11 +266,12 @@
   )
 )
 
-;(define (apply-to-pair funciones route func)
-;  (if (empty? route)
-;      (eval func) funciones)
-;      (get-pair-by-route ((eval (car route) funciones) (cdr route)))
-;  )
+(define (apply-to-pair funciones route func)
+  (if (empty? route)
+      ((eval func) funciones)
+      (get-pair-by-route ((eval (car route) funciones) (cdr route)))
+  )
+)
 
 
 ;Eventos de drag and drop
@@ -305,15 +294,15 @@
   (if (mpair? funciones)
       (mcons (function-coord-updater (mcar funciones) difference dc) (function-coord-updater (mcdr funciones) difference dc))
       (function-coord-updater funciones difference dc)
-      )
-  )
+   )
+)
 
 ;Controla el drag and drop ya que se debe ver a un nivel mas alto para poder mover las dos cajas de la pareja
 (define (detector-drag funciones mouse-click difference dc)
   (if (mpair? funciones)
       (if (and (mpair? (mcar funciones))
-               (or (intersectan? ((mcar (mcar funciones)) dc "coord") mouse-click)
-                   (intersectan? ((mcar (mcdr funciones)) dc "coord") mouse-click)))
+               (or (intersect? ((mcar (mcar funciones)) dc "coord") mouse-click)
+                   (intersect? ((mcar (mcdr funciones)) dc "coord") mouse-click)))
           (coord-updater funciones difference dc)
           (mcons (detector-drag (mcar funciones) mouse-click difference dc) 
                  (detector-drag (mcdr funciones) mouse-click difference dc))
@@ -322,24 +311,6 @@
       )
   )
 
-;Pinta la lista de funciones llamando a dibuja
-;Si encuentra una caja no visible deja de iterar y no pinta sus hijos
-(define (pinta funciones dc)
-  (if (mpair? (mcar funciones))
-      (pinta-lista funciones dc)
-      (if ((mcar funciones) dc "visible")
-          (cons ((mcar funciones) dc "dibuja") (pinta-lista (mcdr funciones) dc))
-          ((mcar funciones) dc "dibuja")
-          )
-      )
-  )
-
-(define (pinta-lista funciones dc)
-  (if (mpair? funciones)
-      (cons (pinta (mcar funciones) dc) (pinta (mcdr funciones) dc))
-      (funciones dc "dibuja")
-      )
-  )
 
 ;Clase canvas 
 (define my-canvas%
@@ -350,58 +321,73 @@
     (inherit refresh-now)
     
     (init-field pairs)
+    
+    (field (click-event 'contract-expand))
     (field (lista-funciones (draw pairs)))
     (field (click '()))
+    (field (pair #f))
     
     ;Cuando hacemos click en una caja
     (define/override (on-event e)
       (let ((my-dc (get-dc))
             (event (send e get-event-type)))
         (cond ((equal? event 'left-down) 
-               (set! click (mcons (send e get-x) (send e get-y))))
+                (begin
+                  (set! click (mcons (send e get-x) (send e get-y)))
+                  (set! pair (search-selected-pair lista-funciones click my-dc))
+                  )
+              )
               ((equal? event 'left-up)
                (begin 
                  (send my-dc clear) ;Limpiamos el canvas y tras detectar las colisiones/mutaciones repintamos
                  
                  (if (equal? (mcons (send e get-x) (send e get-y)) click)
                      ;Click contraer: (detector-colisiones-mutaciones lista-funciones click my-dc)
-                      (let ((box-selected-route (find-route lista-funciones click my-dc)))
-                        (if (empty? box-selected-route) 
-                            (set! lista-funciones (list-creator (mcons '() '()) click '()))
-                            (add-child (get-pair-by-route lista-funciones box-selected-route) my-dc)
-                        )
-                      )
+                     ; (let ((box-selected-route (find-route lista-funciones click my-dc)))
+                     ;   (if (empty? box-selected-route) 
+                     ;       (set! lista-funciones (list-creator (mcons '() '()) click '()))
+                     ;       (add-child (get-pair-by-route lista-funciones box-selected-route) my-dc)
+                     ;   )
+                     ; )
+                                       
+                     ((eval click-event) pair lista-funciones click my-dc)
                      (set! lista-funciones  (detector-drag lista-funciones click 
                                                            (cons (- (send e get-x) (mcar click))
                                                                  (- (send e get-y) (mcdr click))) my-dc))
                      )
-                 
                  (refresh-now)
                  )
                )
-              )
+          )
         )
       )
     
     (define/override (on-paint)
-      (pinta-lista lista-funciones (get-dc))
-      )
+      (paint-list lista-funciones (get-dc))
+    )
     
     (define/public (get-lista) lista-funciones)
+    
+    (define/public (set-event e) (set! click-event e))
     )
   )
 
 ;PRUEBAS
-(define lista-parejas (mcons (mcons 'a (mcons (mlist 1 2) 'b)) (mcons 1 2)))
+;(define lista-parejas (mcons (mcons 'a (mcons (mlist 1 2) 'b)) (mcons 1 2)))
 ;(set-mcdr! (mcar lista-parejas) (mcar lista-parejas))
 ;(set-mcar! (mcdr lista-parejas) lista-parejas)
 
 ;(define lista-parejas (mcons 1 2))
 ;(set-mcdr! lista-parejas lista-parejas)
 
-;(define x (mcons 'a (mcons 'b (mcons 'c null))))
-;(set-mcdr! (mcdr (mcdr x)) x)
+;(define lista-parejas (mcons 'a (mcons 'b (mcons 'c null))))
+;(set-mcdr! (mcdr (mcdr lista-parejas)) lista-parejas)
 
+;Listas
+;(define lista-parejas (mcons (mlist (mlist 'a 'b 'b) 2 3) (mlist 3 4 5 6)))
+
+;Todos los tipos
+(define lista-parejas (mcons (mlist 'list 'en 'el 'car) (mcons (mcons 1 2) (mlist 'list 'en 'el 'cdr))))
 
 ;Inicializa el canvas
 (define frame (new frame%
@@ -426,15 +412,15 @@
                      [min-width 50]
                      [min-height 50]))
 
-(new button% [parent v-panel]
-             [label "Left"]
-             [callback (lambda (button event)
-                         (send msg set-label "Left click"))])
+(define button-add-nodes (new button% [parent v-panel]
+                              [label "Añadir nuevos nodos"]
+                              [callback (lambda (button event)
+                                          (send canvas set-event 'add-child))]))
 
-(new button% [parent v-panel]
-             [label "Right"]
-             [callback (lambda (button event)
-                         (send msg set-label "Right click"))])
+(define button-expand (new button% [parent v-panel]
+                              [label "Contrae / Expande"]
+                              [callback (lambda (button event)
+                                          (send canvas set-event 'contract-expand))]))
 
 (new editor-canvas% [parent v-panel])
 
