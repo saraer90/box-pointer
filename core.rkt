@@ -63,18 +63,18 @@
                  (move-coord coord (- (/ SIZE 2)) MARGIN) ;Si es un dato, bajamos en vertical
                  ))
             ((eq? type 'mcdr) ;Primero hay que mirar lo que tenemos en el car
-             (if (mpair? (mcar data))
-                 (if (mlist? (mcar data)) ;Si hay una lista
-                     (move-coord coord (- (/ SIZE 2)) (* 2 MARGIN)) ;nos quedamos en la x pero nos movemos el doble en la y
-                     (if (mlist? ((eval type) data))
-                         (move-coord coord MARGIN 0)
-                         (move-coord coord (/ MARGIN 2) MARGIN) 
-                         )
-                     )
-                 (if (mlist? ((eval type) data))
-                     (move-coord coord MARGIN 0)
-                     (move-coord coord (- (/ SIZE 2)) MARGIN)
-                     )
+             (if (mlist? ((eval type) data))
+                 (move-coord coord MARGIN 0)
+                 (if (mpair? (mcar data))
+                         (if (mlist? (mcar data)) ;Si hay una lista
+                             (move-coord coord (- (/ SIZE 2)) (* 2 MARGIN)) ;nos quedamos en la x pero nos movemos el doble en la y
+                             (if (mlist? ((eval type) data))
+                                 (move-coord coord MARGIN 0)
+                                 (move-coord coord (/ MARGIN 2) MARGIN) 
+                                 )
+                          )
+                 (move-coord coord (- (/ SIZE 2)) MARGIN)
+                 )
                  )
              ) ;Si no tenemos una lista, comprobaremos que tipo de dato hay en la otra parte de la pareja
             )       ;si tambien es una pareja pondremos las flechas en diagonal, si no en vertical
@@ -182,10 +182,12 @@
 
 ;;;;;;;;;;;;;;;;;Callbacks de cada modo de trabajo;;;;;;;;;;;;;;;;;;
 
-;Contract and expand
-(define (contract-expand funciones entire-list click dc)
+;;;;;;;;;;;;Contract-expand
+(define (contract-expand canvas lista-funciones click . args)
+  (let ((funciones (search-selected-pair lista-funciones click (send canvas get-dc))))
   (if (not (eq? funciones #f)) 
-      (let ((funcion (mcar funciones)))
+      (let ((dc (send canvas get-dc))
+            (funcion (mcar funciones)))
         (if (mpair? ((eval (funcion dc "tipo")) (funcion dc "dato"))) 
             ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
             (set-mcar! funciones (function-creator (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") 
@@ -195,49 +197,56 @@
             )
         )
       )
-  )
-
-;Añade un hijo vacío a una caja
-(define (add-child funciones entire-list click my-dc)
-  (if (eq? funciones #f) 
-      (set! entire-list (list-creator (mcons '() '()) click '()))
-      (let ((funcion (mcar funciones)))
-        (set-mcar! funciones (function-creator (mcons '() '()) (funcion my-dc "coord") (funcion my-dc "tipo") 
-                                               #f (funcion my-dc "visible") (funcion my-dc "ancestors")))
-        (set-mcdr! funciones (list-creator (mcons '() '()) (coord-locator  (mcons '() '()) (funcion my-dc "coord") (funcion my-dc "tipo")) (funcion my-dc "ancestors")))
-        )
-      )
-  )       
-
-;Busca la ruta al hijo
-(define (find-route-branch funciones mouse-click dc)     
-  (let ((funcion (mcar funciones)))
-    (if (intersectan? (funcion dc "coord") mouse-click)
-        (list 'mcar)
-        (let ((list-cdr (find-route (mcdr funciones) mouse-click dc)))
-          (if (empty? list-cdr) '() (cons 'mcdr list-cdr))
-          )
-        )
     )
   )
 
-(define (find-route funciones mouse-click dc)
-  (if (mpair? funciones)
-      (let ((list-cdr (find-route-branch (mcdr funciones) mouse-click dc)))
-        (if (empty? list-cdr)
-            (let ((list-car (find-route-branch (mcar funciones) mouse-click dc)))
-              (if (empty? list-car)
-                  '()
-                  (cons 'mcar list-car)
-                  )
-              )
-            (cons 'mcdr list-cdr)
-            )
-        )
-      '()
+;;;;;;;;;;;;;add-child: Añade un hijo vacío a una caja
+(define (add-child canvas lista-funciones click . args)
+  (let ((funciones (search-selected-pair lista-funciones click (send canvas get-dc))))
+    (if (not (eq? funciones #f))
+        (create-child canvas funciones (mcons (send canvas get-car-child) (send canvas get-cdr-child)) #f)
+    )
+  )
+)
+
+(define (create-child canvas functions child loop)
+  (let ((dc (send canvas get-dc))
+        (function (mcar functions)))
+    (let ((dato (function dc "dato")))
+        (begin 
+          ((eval (string->symbol (string-append "set-" (symbol->string (function dc "tipo")) "!"))) dato child)
+          (set-mcar! functions (function-creator (function dc "dato") (function dc "coord") (function dc "tipo") 
+                                               #f (function dc "visible") (function dc "ancestors")))
+          (if (not loop)
+              (set-mcdr! functions (list-creator child (coord-locator  child (function dc "coord") (function dc "tipo")) (function dc "ancestors")))
+          )    
+        )         
+      )
+    )
+)
+    
+        
+
+;;;;;'start-loop : Añade un hijo siendo una referencia a otra caja
+(define (start-loop canvas funciones click . args)
+  (if (not (eq? funciones #f))
+      (send canvas set-event 'end-loop)
+  )
+)
+
+(define (end-loop canvas lista-funciones click . args)
+  (let ((dc (send canvas get-dc))) 
+    (let ((origen (search-selected-pair lista-funciones (car args) dc))
+          (destino (search-selected-pair lista-funciones click dc)))
+      (if (and (not (eq? origen #f)) (not (eq? destino #f)))
+          (create-child canvas origen ((mcar destino) dc "dato") #t)
+          )
       )
   )
+  (send canvas set-event 'add-child)
+)
 
+;;;;;;;;;;;;Común: antes de realizar acciones buscamos sobre la pareja que se ha hecho click y la devolvemos
 ;Busca el elemento sobre el que hemos hecho click
 (define (recursive-search funciones mouse-click dc)     
   (let ((funcion (mcar funciones)))
@@ -257,21 +266,6 @@
             )
         )
       #f
-      )
-  )
-
-;Aplica el evento al hijo según su ruta
-(define (get-pair-by-route funciones route)
-  (if (or (empty? route) (empty? (cdr route)))
-      funciones
-      (get-pair-by-route ((eval (car route)) funciones) (cdr route))
-      )
-  )
-
-(define (apply-to-pair funciones route func)
-  (if (empty? route)
-      ((eval func) funciones)
-      (get-pair-by-route ((eval (car route) funciones) (cdr route)))
       )
   )
 
@@ -324,11 +318,13 @@
     
     (init-field pairs)
     (init-field label)
+    (init-field text-field-car)
+    (init-field text-field-cdr)
     
     (field (click-event 'contract-expand))
     (field (lista-funciones (draw pairs)))
-    (field (click '()))
-    (field (pair #f))
+    (field (last-click (new-coord 0 0)))
+    (field (click (new-coord 0 0)))
     
     ;Cuando hacemos click en una caja
     (define/override (on-event e)
@@ -336,24 +332,15 @@
             (event (send e get-event-type)))
         (cond ((equal? event 'left-down) 
                (begin
-                 (set! click (mcons (send e get-x) (send e get-y)))
-                 (set! pair (search-selected-pair lista-funciones click my-dc))
+                 (set! last-click (copy-coord click))
+                 (set! click (new-coord (send e get-x) (send e get-y)))
                  )
                )
               ((equal? event 'left-up)
                (begin 
-                 (send my-dc clear) ;Limpiamos el canvas y tras detectar las colisiones/mutaciones repintamos
-                 
-                 (if (equal? (mcons (send e get-x) (send e get-y)) click)
-                     ;Click contraer: (detector-colisiones-mutaciones lista-funciones click my-dc)
-                     ; (let ((box-selected-route (find-route lista-funciones click my-dc)))
-                     ;   (if (empty? box-selected-route) 
-                     ;       (set! lista-funciones (list-creator (mcons '() '()) click '()))
-                     ;       (add-child (get-pair-by-route lista-funciones box-selected-route) my-dc)
-                     ;   )
-                     ; )
-                     
-                     ((eval click-event) pair lista-funciones click my-dc)
+                 (send my-dc clear) ;Limpiamos el canvas y tras realizar el evento repintamos
+                 (if (equal? (new-coord (send e get-x) (send e get-y)) click)
+                     ((eval click-event) this lista-funciones click last-click)
                      (set! lista-funciones  (detector-drag lista-funciones click 
                                                            (cons (- (send e get-x) (mcar click))
                                                                  (- (send e get-y) (mcdr click))) my-dc))
@@ -372,14 +359,19 @@
     
     (define/public (get-lista) lista-funciones)
     
+    (define/public (get-car-child) (send text-field-car get-value))
+    
+    (define/public (get-cdr-child) (send text-field-cdr get-value))
+    
     (define/public (set-event e) (set! click-event e))
-    )
+  )
   )
 
+
 ;PRUEBAS
-;(define lista-parejas (mcons (mcons 'a (mcons (mlist 1 2) 'b)) (mcons 1 2)))
-;(set-mcdr! (mcar lista-parejas) (mcar lista-parejas))
-;(set-mcar! (mcdr lista-parejas) lista-parejas)
+(define lista-parejas (mcons (mcons 'a (mcons (mlist 1 2) 'b)) (mcons 1 2)))
+(set-mcdr! (mcar lista-parejas) (mcar lista-parejas))
+(set-mcar! (mcdr lista-parejas) lista-parejas)
 
 ;(define lista-parejas (mcons 1 2))
 ;(set-mcdr! lista-parejas lista-parejas)
@@ -388,7 +380,7 @@
 ;(set-mcdr! (mcdr (mcdr lista-parejas)) lista-parejas)
 
 ;Listas
-(define lista-parejas (mcons (mlist (mlist 'a 'b 'b) 2 3) (mlist 3 4 5 6)))
+;(define lista-parejas (mcons (mlist (mlist 'a 'b 'b) 2 3) (mlist 3 4 5 6)))
 
 ;Todos los tipos
 ;(define lista-parejas (mcons (mlist 'list 'en 'el 'car) (mcons (mcons (mlist 1 2 4) 1 ) (mlist 'list (mcons 1 (mcons 3 (mcons 3 1))) 'el 'cdr))))
@@ -406,6 +398,16 @@
                             [min-width 700]
                             [min-height 100]))
 
+(define h-panel-childs (new horizontal-panel% 
+                          [alignment (list 'left 'top)]
+                          [stretchable-height #f]
+                          [parent frame]
+                          [stretchable-width #t]
+                          [min-width 700]
+                          [min-height 25]))
+
+(send h-panel-childs show #f)
+
 (define h-panel-text (new horizontal-panel% 
                           [alignment (list 'left 'top)]
                           [stretchable-height #f]
@@ -420,29 +422,53 @@
                    [auto-resize #t]))
 
 
+(define text-field-car (new text-field%
+                        (label "Car: ")
+                        (parent h-panel-childs)))
+
+(define text-field-cdr (new text-field%
+                        (label "Cdr: ")
+                        (parent h-panel-childs)))
+
+(new button% [label "Bucle"]	 
+   	 [parent h-panel-childs]	 
+            [callback 
+             (lambda (boton evento)
+                        (send canvas set-event 'start-loop))])
+
 (define canvas (new my-canvas% 
                     [pairs lista-parejas] 
                     [label label]
+                    [text-field-car text-field-car]
+                    [text-field-cdr text-field-cdr]
                     [style (list 'vscroll 'hscroll)]
                     [parent h-panel-canvas]))
 
 (define menu-bar (new menu-bar%	 
                       [parent frame]	 
                       ))
-(new menu%
-     (label "&Añadir nuevos nodos")
-     (parent menu-bar)
-     [demand-callback (lambda (menu)
-                        (send canvas set-event 'add-child))])
 
-(new menu%
-     (label "&Contrae / Expande")
-     (parent menu-bar)
-     [demand-callback (lambda (menu)
-                        (send canvas set-event 'contract-expand))])
+(define menu (new menu%
+                  [label "Archivo"]
+                  [parent menu-bar]))
 
+(define menu (new menu%
+                  [label "Modo"]
+                  [parent menu-bar]))
 
+(new menu-item%
+     [label "&Añadir nuevos nodos"]
+     [parent menu]
+     [callback (lambda (menu evento)
+                        (send canvas set-event 'add-child)
+                        (send h-panel-childs show #t))])
 
+(new menu-item%
+     [label "&Contrae / Expande"]
+     [parent menu]
+     [callback (lambda (menu evento)
+                        (send canvas set-event 'contract-expand)
+                        (send h-panel-childs show #f))])
 
 ;(new editor-canvas% [parent v-panel-buttons])
 

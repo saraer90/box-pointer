@@ -4,6 +4,7 @@
 (provide new-coord)
 (provide get-x)
 (provide get-y)
+(provide copy-coord)
 (provide incr-coord)
 (provide move-coord)
 (provide sum-coord)
@@ -15,6 +16,8 @@
 
 (define (get-x coord) (mcar coord))
 (define (get-y coord) (mcdr coord))
+
+(define (copy-coord coord) (new-coord (get-x coord) (get-y coord)))
 
 (define (incr-coord coord inc) (move-coord coord inc inc))
 
