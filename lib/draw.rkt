@@ -51,15 +51,68 @@
     )
   )
 
+(define (cycle-finder pair ancestors)
+  (if (null? ancestors) 
+      (cons #f '())
+      (if (eq? (caar ancestors) pair) 
+          (cons #t (cdar ancestors))
+          (cycle-finder pair (cdr ancestors))
+          )
+      )
+  )
+
+(define (print function dc)
+  (let ((coord (function "coord"))
+        (tipo (function "tipo"))
+        (pair (function "dato"))
+        (ancestors (function "ancestors"))
+        (es-dato (function "es-dato"))
+        (visible (function "visible")))
+    (let ((x (get-x coord))
+          (y (get-y coord))
+          (cycle (cycle-finder ((eval tipo) pair) ancestors))
+          (dato ((eval tipo) pair))
+          (parent-coord (if (null? (cdr ancestors)) '() (cdadr ancestors))))
+               (if es-dato
+                   (if (car cycle) 
+                       ;Si en vez de dato tenemos un ciclo, debemos pintar la linea
+                       (draw-cycle coord tipo (cdr cycle) dc)                              
+                       (send dc draw-text (~a dato) (+ x PADDING) (+ y PADDING)) ;Dato simple
+                       )
+                   (begin 
+                     (send dc draw-rectangle
+                           x y       ; Top-left at (x, y), y pixels down from top-left
+                           SIZE SIZE)  ; wide and high
+                     (if (and (mpair? parent-coord) (eq? tipo 'mcar)) ;Pintamos las lineas hacia el padre, se encargará la parte car
+                         (if (and (> x (+ (mcar parent-coord) SIZE)) (< y (+ (mcdr parent-coord) SIZE)))
+                             (send dc draw-line
+                                   (+ (mcar parent-coord) SIZE ) (+ (mcdr parent-coord) (/ SIZE 2))
+                                   x (+ y (/ SIZE 2)))
+                             (send dc draw-line
+                                   (+ (mcar parent-coord) (/ SIZE 2)) (+ (mcdr parent-coord) SIZE)
+                                   (+ x SIZE) y)
+                             )
+                         null
+                         )   
+                     (if (not visible)
+                         ;Cuando no es visible mostramos el indicador para que se expanda
+                         (send dc draw-text (~a "+") (+ x PADDING) (+ y PADDING))
+                         null
+                         )
+                     )
+                   )
+               )
+    )
+  )
 
 ;Prints a list of functions calling print 
 ;If finds an invisible box stops and doesn't print its childs.
 (define (paint functions dc)
   (if (mpair? (mcar functions))
       (paint-list functions dc)
-      (if ((mcar functions) dc "visible") ;Calls the function with parameter visible to know if it's visible or not.
-          (cons ((mcar functions) dc "dibuja") (paint-list (mcdr functions) dc))
-          ((mcar functions) dc "dibuja") ;If not, prints the element but stops recursion.
+      (if ((mcar functions) "visible") ;Calls the function with parameter visible to know if it's visible or not.
+          (cons (print (mcar functions) dc) (paint-list (mcdr functions) dc))
+          (print (mcar functions) dc) ;If not, prints the element but stops recursion.
           )
       )
   )
@@ -67,6 +120,6 @@
 (define (paint-list functions dc)
   (if (mpair? functions)
       (cons (paint (mcar functions) dc) (paint (mcdr functions) dc))
-      (functions dc "dibuja")
+      (print functions dc)
       )
   )

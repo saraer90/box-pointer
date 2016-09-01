@@ -18,7 +18,7 @@
   (count-car-levels list -1 '())
   )
 
-;;Debe ser un pair, si es una lista dejamos de contar ya que se dibujará hacia la derecha.
+;;Debe ser un pair, si es una lista dejamos de contar ya que se dibujará hacia la derecha o en vertical.
 ;;Además si se encuentra un ciclo también se dejara de contar.
 (define (count-car-levels list levels ancestors)
   (if (and (mpair? list) (not (car (cycle-finder list ancestors))))
@@ -38,17 +38,17 @@
 
 (define (list-recursion data coord type old-ancestors)
   (let ((ancestors (cons (cons data coord) old-ancestors)))   ;Añadimos el padre a la lista de antecesores
-    (mcons (function-creator data coord type #f #t ancestors) ;Dibujamos la caja
+    (mcons (new-element data coord type #f #t ancestors) ;Dibujamos la caja
            ;Si el hijo es una pareja movemos las coordenadas sino pintamos directamente dentro
            (if (mpair? ((eval type) data))
                ;Si es una pareja miramos los bucles
                (let ((cycle-data (cycle-finder ((eval type) data) ancestors)))
                  (if (car cycle-data)
-                     (function-creator data coord type #t #t ancestors) ;Si es un ciclo se envía como tipo dato y pintará la linea al antecesor
+                     (new-element data coord type #t #t ancestors) ;Si es un ciclo se envía como tipo dato y pintará la linea al antecesor
                      (list-creator ((eval type) data) (coord-locator data coord type) ancestors) ;Recursion
                      )
                  )
-               (function-creator data coord type #t #t ancestors)
+               (new-element data coord type #t #t ancestors)
                )
            )
     )
@@ -95,11 +95,21 @@
       )
   )
 
-;Creador de funciones
-(define (function-creator pair coord tipo es-dato visible ancestors)
+(define (get-old-data data ancestors)
+  (let ((cycle (cycle-finder data ancestors)))
+    (cond ((car cycle) 'cycle)
+          ((if (mpair? data)
+               (if (mlist? data)
+                   'mlist
+                   'mpair
+                   )))
+          (default data))))
+
+;Creador de funciones ya sean cajas o datos
+(define (new-element pair coord tipo es-dato visible ancestors)
   (let ((parent-coord (if (null? (cdr ancestors)) '() (cdadr ancestors)))
         (old-data (~a ((eval tipo) pair)))) ;Guardamos el dato que contiene como cadena para que no nos afecten las mutaciones
-    (lambda (dc msg)
+    (lambda (msg)
       (cond ((string=? msg "dato") pair)
             ((string=? msg "cambio") (not (equal? old-data (~a ((eval tipo) pair))))) ;Para saber si ha habido una mutación comparamos con la cadena anterior
             ((string=? msg "coord") coord)
@@ -108,73 +118,37 @@
             ((string=? msg "visible") visible)
             ((string=? msg "es-dato") es-dato)
             ((string=? msg "ancestors") ancestors)
-            ((string=? msg "dibuja")
-             (let ((x (get-x coord))
-                   (y (get-y coord))
-                   (dato ((eval tipo) pair))
-                   (cycle (cycle-finder ((eval tipo) pair) ancestors)))
-               (if es-dato
-                   (if (car cycle) 
-                       ;Si en vez de dato tenemos un ciclo, debemos pintar la linea
-                       (draw-cycle coord tipo (cdr cycle) dc)                              
-                       (send dc draw-text (~a dato) (+ x PADDING) (+ y PADDING)) ;Dato simple
-                       )
-                   (begin 
-                     (send dc draw-rectangle
-                           x y       ; Top-left at (x, y), y pixels down from top-left
-                           SIZE SIZE)  ; wide and high
-                     (if (and (mpair? parent-coord) (eq? tipo 'mcar)) ;Pintamos las lineas hacia el padre, se encargará la parte car
-                         (if (and (> x (+ (mcar parent-coord) SIZE)) (< y (+ (mcdr parent-coord) SIZE)))
-                             (send dc draw-line
-                                   (+ (mcar parent-coord) SIZE ) (+ (mcdr parent-coord) (/ SIZE 2))
-                                   x (+ y (/ SIZE 2)))
-                             (send dc draw-line
-                                   (+ (mcar parent-coord) (/ SIZE 2)) (+ (mcdr parent-coord) SIZE)
-                                   (+ x SIZE) y)
-                             )
-                         )   
-                     (if (not visible)
-                         ;Cuando no es visible mostramos el indicador para que se expanda
-                         (send dc draw-text (~a "+") (+ x PADDING) (+ y PADDING))
-                         )
-                     )
-                   )
-               )
-             )
             )
       )
     )
   )
 
 
-;Llama al creador de funciones para representar los cambios realizados, calcula las nuevas funciones
-(define (change-detector funcion dc)
-  (list-recursion (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") (cdr (funcion dc "ancestors")))
-  )
+
 
 ;Detecta las colisiones y mutaciones al repintar el canvas
-(define (detecta-colision funciones mouse-click dc)     
+(define (detecta-colision funciones mouse-click)     
   (let ((funcion (mcar funciones)))
-    (if (funcion dc "cambio") ;Si hay un cambio crea las nuevas funciones y sigue detectando la colisión
-        (detecta-colision (change-detector funcion dc) mouse-click dc)
-        (if (intersectan? (funcion dc "coord") mouse-click) ;Si no, comprueba si hay intersección
-            (if (mpair? ((eval (funcion dc "tipo")) (funcion dc "dato"))) 
+    (if (funcion "cambio") ;Si hay un cambio crea las nuevas funciones y sigue detectando la colisión
+        (detecta-colision (change-detector funcion) mouse-click)
+        (if (intersectan? (funcion "coord") mouse-click) ;Si no, comprueba si hay intersección
+            (if (mpair? ((eval (funcion "tipo")) (funcion "dato"))) 
                 ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
-                (mcons (function-creator (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") 
-                                         (funcion dc "es-dato") (not (funcion dc "visible")) (funcion dc "ancestors"))
+                (mcons (new-element (funcion "dato") (funcion "coord") (funcion "tipo") 
+                                    (funcion "es-dato") (not (funcion "visible")) (funcion "ancestors"))
                        (mcdr funciones))
                 funciones ;Datos simples no se esconden, dejamos la lista tal cual
                 )
-            (mcons funcion (detector-colisiones-mutaciones (mcdr funciones) mouse-click dc)) ;si no intersecta se deja tal cual y seguimos iterando
+            (mcons funcion (detector-colisiones-mutaciones (mcdr funciones) mouse-click)) ;si no intersecta se deja tal cual y seguimos iterando
             )
         )
     )
   )
 
-(define (detector-colisiones-mutaciones funciones mouse-click dc)
+(define (detector-colisiones-mutaciones funciones mouse-click)
   (if (mpair? funciones)
-      (mcons (detecta-colision (mcar funciones) mouse-click dc) 
-             (detecta-colision (mcdr funciones) mouse-click dc))
+      (mcons (detecta-colision (mcar funciones) mouse-click) 
+             (detecta-colision (mcdr funciones) mouse-click))
       funciones
       )
   )
@@ -184,14 +158,13 @@
 
 ;;;;;;;;;;;;Contract-expand
 (define (contract-expand canvas lista-funciones click . args)
-  (let ((funciones (search-selected-pair lista-funciones click (send canvas get-dc))))
+  (let ((funciones (search-selected-pair lista-funciones click)))
   (if (not (eq? funciones #f)) 
-      (let ((dc (send canvas get-dc))
-            (funcion (mcar funciones)))
-        (if (mpair? ((eval (funcion dc "tipo")) (funcion dc "dato"))) 
+      (let ((funcion (mcar funciones)))
+        (if (mpair? ((eval (funcion "tipo")) (funcion "dato"))) 
             ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
-            (set-mcar! funciones (function-creator (funcion dc "dato") (funcion dc "coord") (funcion dc "tipo") 
-                                                     (funcion dc "es-dato") (not (funcion dc "visible")) (funcion dc "ancestors"))
+            (set-mcar! funciones (new-element (funcion "dato") (funcion "coord") (funcion "tipo") 
+                                                     (funcion "es-dato") (not (funcion "visible")) (funcion "ancestors"))
                                    )
             ;Datos simples no se esconden, dejamos la lista tal cual
             )
@@ -202,7 +175,7 @@
 
 ;;;;;;;;;;;;;add-child: Añade un hijo vacío a una caja
 (define (add-child canvas lista-funciones click . args)
-  (let ((funciones (search-selected-pair lista-funciones click (send canvas get-dc))))
+  (let ((funciones (search-selected-pair lista-funciones click)))
     (if (not (eq? funciones #f))
         (create-child canvas funciones (mcons (send canvas get-car-child) (send canvas get-cdr-child)) #f)
     )
@@ -210,17 +183,39 @@
 )
 
 (define (create-child canvas functions child loop)
-  (let ((dc (send canvas get-dc))
-        (function (mcar functions)))
-    (let ((dato (function dc "dato")))
+  (let ((function (mcar functions)))
+    (let ((dato (function "dato")))
         (begin 
-          ((eval (string->symbol (string-append "set-" (symbol->string (function dc "tipo")) "!"))) dato child)
-          (set-mcar! functions (function-creator (function dc "dato") (function dc "coord") (function dc "tipo") 
-                                               #f (function dc "visible") (function dc "ancestors")))
-          (if (not loop)
-              (set-mcdr! functions (list-creator child (coord-locator  child (function dc "coord") (function dc "tipo")) (function dc "ancestors")))
-          )    
+          ((eval (string->symbol (string-append "set-" (symbol->string (function "tipo")) "!"))) dato child)
+          (re-create functions)  
         )         
+      )
+    )
+)
+
+;Llama al creador de funciones para representar los cambios realizados, calcula las nuevas funciones
+(define (re-create funciones)
+  (let ((funcion (mcar funciones)))
+        (let ((funcion (mcar funciones)))
+          (let ((data (funcion "dato"))
+                (coord (funcion "coord"))
+                (type (funcion "tipo")))
+            (let ((ancestors (cons (cons data coord) (cdr (funcion "ancestors"))))) ;Cambiamos el padre de la lista de antecesores
+              (set-mcar! funciones (new-element data coord type #f #t ancestors))
+              (set-mcdr! funciones
+                         (if (mpair? ((eval type) data))
+                             ;Si es una pareja miramos los bucles
+                             (let ((cycle-data (cycle-finder ((eval type) data) ancestors)))
+                               (if (car cycle-data)
+                                   (new-element data coord type #t #t ancestors) ;Si es un ciclo se envía como tipo dato y pintará la linea al antecesor
+                                   (list-creator ((eval type) data) (coord-locator data coord type) ancestors) ;Recursion
+                                   )
+                               )
+                             (new-element data coord type #t #t ancestors)
+                             )
+                         )
+              )
+         )
       )
     )
 )
@@ -235,48 +230,47 @@
 )
 
 (define (end-loop canvas lista-funciones click . args)
-  (let ((dc (send canvas get-dc))) 
-    (let ((origen (search-selected-pair lista-funciones (car args) dc))
-          (destino (search-selected-pair lista-funciones click dc)))
+    (let ((origen (search-selected-pair lista-funciones (car args)))
+          (destino (search-selected-pair lista-funciones click)))
       (if (and (not (eq? origen #f)) (not (eq? destino #f)))
-          (create-child canvas origen ((mcar destino) dc "dato") #t)
+          (create-child canvas origen ((mcar destino) "dato") #t)
           )
       )
-  )
   (send canvas set-event 'add-child)
 )
 
 ;;;;;;;;;;;;Común: antes de realizar acciones buscamos sobre la pareja que se ha hecho click y la devolvemos
 ;Busca el elemento sobre el que hemos hecho click
-(define (recursive-search funciones mouse-click dc)     
+(define (recursive-search funciones mouse-click)     
   (let ((funcion (mcar funciones)))
-    (if (intersect? (funcion dc "coord") mouse-click)
-        funciones
-        (search-selected-pair (mcdr funciones) mouse-click dc)
-        )
-    )
-  )
+        (if (intersect? (funcion "coord") mouse-click)
+            funciones
+            (search-selected-pair (mcdr funciones) mouse-click)
+       )
+   )
+)
 
-(define (search-selected-pair funciones mouse-click dc)
+(define (search-selected-pair funciones mouse-click)
   (if (mpair? funciones)
-      (let ((search-cdr (recursive-search (mcdr funciones) mouse-click dc)))
-        (if (eq? search-cdr #f)
-            (recursive-search (mcar funciones) mouse-click dc)
+        (let ((search-cdr (recursive-search (mcdr funciones) mouse-click)))
+          (if (eq? search-cdr #f)
+            (recursive-search (mcar funciones) mouse-click)
             search-cdr
             )
-        )
+          )
       #f
-      )
-  )
+   )
+)
+
 
 
 ;;;;;;;;;;;;;;;;Eventos de drag and drop;;;;;;;;;;;;;;;;;;;;;;;;
-(define (function-coord-updater funciones difference dc)
+(define (function-coord-updater funciones difference)
   (if (mpair? funciones)
-      (coord-updater funciones difference dc)
-      (if (funciones dc "es-dato")
+      (coord-updater funciones difference)
+      (if (funciones "es-dato")
           funciones
-          (let ((orig-coord (funciones dc "coord")))
+          (let ((orig-coord (funciones "coord")))
             (begin (set-mcar! orig-coord (+ (mcar orig-coord) (car difference))) 
                    (set-mcdr! orig-coord (+ (mcdr orig-coord) (cdr difference)))
                    funciones
@@ -286,22 +280,22 @@
       )
   )
 
-(define (coord-updater funciones difference dc)
+(define (coord-updater funciones difference)
   (if (mpair? funciones)
-      (mcons (function-coord-updater (mcar funciones) difference dc) (function-coord-updater (mcdr funciones) difference dc))
-      (function-coord-updater funciones difference dc)
+      (mcons (function-coord-updater (mcar funciones) difference) (function-coord-updater (mcdr funciones) difference))
+      (function-coord-updater funciones difference)
       )
   )
 
 ;Controla el drag and drop ya que se debe ver a un nivel mas alto para poder mover las dos cajas de la pareja
-(define (detector-drag funciones mouse-click difference dc)
+(define (detector-drag funciones mouse-click difference)
   (if (mpair? funciones)
       (if (and (mpair? (mcar funciones))
-               (or (intersect? ((mcar (mcar funciones)) dc "coord") mouse-click)
-                   (intersect? ((mcar (mcdr funciones)) dc "coord") mouse-click)))
-          (coord-updater funciones difference dc)
-          (mcons (detector-drag (mcar funciones) mouse-click difference dc) 
-                 (detector-drag (mcdr funciones) mouse-click difference dc))
+               (or (intersect? ((mcar (mcar funciones)) "coord") mouse-click)
+                   (intersect? ((mcar (mcdr funciones)) "coord") mouse-click)))
+          (coord-updater funciones difference)
+          (mcons (detector-drag (mcar funciones) mouse-click difference) 
+                 (detector-drag (mcdr funciones) mouse-click difference))
           )
       funciones
       )
@@ -325,32 +319,32 @@
     (field (lista-funciones (draw pairs)))
     (field (last-click (new-coord 0 0)))
     (field (click (new-coord 0 0)))
-    
+
     ;Cuando hacemos click en una caja
     (define/override (on-event e)
       (let ((my-dc (get-dc))
-            (event (send e get-event-type)))
+            (event (send e get-event-type))
+            (x (send e get-x))
+            (y (send e get-y)))
         (cond ((equal? event 'left-down) 
                (begin
                  (set! last-click (copy-coord click))
-                 (set! click (new-coord (send e get-x) (send e get-y)))
+                 (set! click (new-coord x y))
                  )
                )
               ((equal? event 'left-up)
-               (begin 
                  (send my-dc clear) ;Limpiamos el canvas y tras realizar el evento repintamos
-                 (if (equal? (new-coord (send e get-x) (send e get-y)) click)
+                 (if (equal? (new-coord x y) click)
                      ((eval click-event) this lista-funciones click last-click)
-                     (set! lista-funciones  (detector-drag lista-funciones click 
-                                                           (cons (- (send e get-x) (mcar click))
-                                                                 (- (send e get-y) (mcdr click))) my-dc))
+                     (set! lista-funciones (detector-drag lista-funciones click 
+                                                           (cons (- (if (< x 0) 0 x) (mcar click))
+                                                                 (- (if (< y 0) 0 y) (mcdr click)))))
                      )
                  (refresh-now)
                  )
                )
               )
         )
-      )
     
     (define/override (on-paint)
       (paint-list lista-funciones (get-dc))
@@ -364,8 +358,21 @@
     (define/public (get-cdr-child) (send text-field-cdr get-value))
     
     (define/public (set-event e) (set! click-event e))
+    
+    (define/public (reload)
+      (set! lista-funciones (draw pairs))
+      (send (get-dc) clear)
+      (refresh-now)
+    )
+    
+    (define/public (new)
+      (set! pairs (mcons " " " "))
+      (set! lista-funciones (draw pairs))
+      (send (get-dc) clear)
+      (refresh-now)
+    )
   )
-  )
+)
 
 
 ;PRUEBAS
@@ -448,24 +455,36 @@
                       [parent frame]	 
                       ))
 
-(define menu (new menu%
+(define menu-archivo (new menu%
                   [label "Archivo"]
                   [parent menu-bar]))
 
-(define menu (new menu%
+(define menu-modo (new menu%
                   [label "Modo"]
                   [parent menu-bar]))
 
 (new menu-item%
+     [label "&Nuevo"]
+     [parent menu-archivo]
+     [callback (lambda (menu evento)
+                        (send canvas new))])
+
+(new menu-item%
+     [label "&Refrescar"]
+     [parent menu-archivo]
+     [callback (lambda (menu evento)
+                        (send canvas reload))])
+
+(new menu-item%
      [label "&Añadir nuevos nodos"]
-     [parent menu]
+     [parent menu-modo]
      [callback (lambda (menu evento)
                         (send canvas set-event 'add-child)
                         (send h-panel-childs show #t))])
 
 (new menu-item%
      [label "&Contrae / Expande"]
-     [parent menu]
+     [parent menu-modo]
      [callback (lambda (menu evento)
                         (send canvas set-event 'contract-expand)
                         (send h-panel-childs show #f))])
