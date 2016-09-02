@@ -95,16 +95,6 @@
       )
   )
 
-(define (get-old-data data ancestors)
-  (let ((cycle (cycle-finder data ancestors)))
-    (cond ((car cycle) 'cycle)
-          ((if (mpair? data)
-               (if (mlist? data)
-                   'mlist
-                   'mpair
-                   )))
-          (default data))))
-
 ;Creador de funciones ya sean cajas o datos
 (define (new-element pair coord tipo es-dato visible ancestors)
   (let ((parent-coord (if (null? (cdr ancestors)) '() (cdadr ancestors)))
@@ -123,42 +113,11 @@
     )
   )
 
-
-
-
-;Detecta las colisiones y mutaciones al repintar el canvas
-(define (detecta-colision funciones mouse-click)     
-  (let ((funcion (mcar funciones)))
-    (if (funcion "cambio") ;Si hay un cambio crea las nuevas funciones y sigue detectando la colisión
-        (detecta-colision (change-detector funcion) mouse-click)
-        (if (intersectan? (funcion "coord") mouse-click) ;Si no, comprueba si hay intersección
-            (if (mpair? ((eval (funcion "tipo")) (funcion "dato"))) 
-                ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
-                (mcons (new-element (funcion "dato") (funcion "coord") (funcion "tipo") 
-                                    (funcion "es-dato") (not (funcion "visible")) (funcion "ancestors"))
-                       (mcdr funciones))
-                funciones ;Datos simples no se esconden, dejamos la lista tal cual
-                )
-            (mcons funcion (detector-colisiones-mutaciones (mcdr funciones) mouse-click)) ;si no intersecta se deja tal cual y seguimos iterando
-            )
-        )
-    )
-  )
-
-(define (detector-colisiones-mutaciones funciones mouse-click)
-  (if (mpair? funciones)
-      (mcons (detecta-colision (mcar funciones) mouse-click) 
-             (detecta-colision (mcdr funciones) mouse-click))
-      funciones
-      )
-  )
-
-
 ;;;;;;;;;;;;;;;;;Callbacks de cada modo de trabajo;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;Contract-expand
-(define (contract-expand canvas lista-funciones click . args)
-  (let ((funciones (search-selected-pair lista-funciones click)))
+(define (contract-expand canvas diagram click . args)
+  (let ((funciones (search-selected-pair diagram click)))
   (if (not (eq? funciones #f)) 
       (let ((funcion (mcar funciones)))
         (if (mpair? ((eval (funcion "tipo")) (funcion "dato"))) 
@@ -174,8 +133,8 @@
   )
 
 ;;;;;;;;;;;;;add-child: Añade un hijo vacío a una caja
-(define (add-child canvas lista-funciones click . args)
-  (let ((funciones (search-selected-pair lista-funciones click)))
+(define (add-child canvas diagram click . args)
+  (let ((funciones (search-selected-pair diagram click)))
     (if (not (eq? funciones #f))
         (create-child canvas funciones (mcons (send canvas get-car-child) (send canvas get-cdr-child)) #f)
     )
@@ -220,7 +179,6 @@
     )
 )
     
-        
 
 ;;;;;'start-loop : Añade un hijo siendo una referencia a otra caja
 (define (start-loop canvas funciones click . args)
@@ -229,9 +187,9 @@
   )
 )
 
-(define (end-loop canvas lista-funciones click . args)
-    (let ((origen (search-selected-pair lista-funciones (car args)))
-          (destino (search-selected-pair lista-funciones click)))
+(define (end-loop canvas diagram click . args)
+    (let ((origen (search-selected-pair diagram (car args)))
+          (destino (search-selected-pair diagram click)))
       (if (and (not (eq? origen #f)) (not (eq? destino #f)))
           (create-child canvas origen ((mcar destino) "dato") #t)
           )
@@ -308,7 +266,9 @@
     (super-new)
     
     (inherit get-dc)
+    (inherit get-view-start)
     (inherit refresh-now)
+    (inherit make-bitmap)
     
     (init-field pairs)
     (init-field label)
@@ -316,42 +276,52 @@
     (init-field text-field-cdr)
     
     (field (click-event 'contract-expand))
-    (field (lista-funciones (draw pairs)))
+    (field (diagram (draw pairs)))
     (field (last-click (new-coord 0 0)))
     (field (click (new-coord 0 0)))
+    
+    ;;;;;; Get coords with scrollbars reference
+    (define (get-coord-scrollbars coord)
+      (let-values (((init-point-x init-point-y) (get-view-start)))
+        (move-coord coord init-point-x init-point-y)
+      )
+    )
 
-    ;Cuando hacemos click en una caja
+    ;;;;;;Canvas events
     (define/override (on-event e)
       (let ((my-dc (get-dc))
-            (event (send e get-event-type))
-            (x (send e get-x))
-            (y (send e get-y)))
-        (cond ((equal? event 'left-down) 
+            (event (send e get-event-type)))
+        (cond ((equal? event 'left-down)
                (begin
                  (set! last-click (copy-coord click))
-                 (set! click (new-coord x y))
+                 (set! click (get-coord-scrollbars (new-coord (send e get-x) (send e get-y))))
                  )
                )
               ((equal? event 'left-up)
-                 (send my-dc clear) ;Limpiamos el canvas y tras realizar el evento repintamos
-                 (if (equal? (new-coord x y) click)
-                     ((eval click-event) this lista-funciones click last-click)
-                     (set! lista-funciones (detector-drag lista-funciones click 
-                                                           (cons (- (if (< x 0) 0 x) (mcar click))
-                                                                 (- (if (< y 0) 0 y) (mcdr click)))))
-                     )
-                 (refresh-now)
-                 )
+                  (let ((event-coord (get-coord-scrollbars (new-coord (send e get-x) (send e get-y)))))
+                    (send my-dc clear) ;Limpiamos el canvas y tras realizar el evento repintamos
+                    (if (equal? event-coord click)
+                        ((eval click-event) this diagram click last-click)
+                        (let ((x (get-x event-coord))
+                              (y (get-y event-coord)))
+                          (set! diagram (detector-drag diagram click 
+                                                            (cons (- (if (< x 0) 0 x) (mcar click))
+                                                                  (- (if (< y 0) 0 y) (mcdr click)))))
+                         )
+                    )
+                    (refresh-now)
+                  )
                )
-              )
-        )
-    
+         )
+       )
+    )
+   
     (define/override (on-paint)
-      (paint-list lista-funciones (get-dc))
+      (paint-diagram diagram (get-dc))
       (send label set-label (~a pairs))
       )
     
-    (define/public (get-lista) lista-funciones)
+    (define/public (get-lista) diagram)
     
     (define/public (get-car-child) (send text-field-car get-value))
     
@@ -360,26 +330,38 @@
     (define/public (set-event e) (set! click-event e))
     
     (define/public (reload)
-      (set! lista-funciones (draw pairs))
+      (set! diagram (draw pairs))
       (send (get-dc) clear)
       (refresh-now)
     )
     
     (define/public (new)
       (set! pairs (mcons " " " "))
-      (set! lista-funciones (draw pairs))
+      (set! diagram (draw pairs))
       (send (get-dc) clear)
       (refresh-now)
     )
+    
+    (define/public (save-as-image)
+      (let ((coords (get-diagram-coords diagram)))
+        (let ((bitmap (make-bitmap (cadr coords) (cddr coords))))
+          (let ((dc (send bitmap make-dc)))
+            (paint-diagram diagram dc)
+            (send bitmap save-file "canvas.png" 'png)
+            )
+          )
+        )
+    )
+    )
   )
-)
 
 
 ;PRUEBAS
-(define lista-parejas (mcons (mcons 'a (mcons (mlist 1 2) 'b)) (mcons 1 2)))
-(set-mcdr! (mcar lista-parejas) (mcar lista-parejas))
-(set-mcar! (mcdr lista-parejas) lista-parejas)
+;(define lista-parejas (mcons (mcons 'a (mcons (mlist 1 2) 'b)) (mcons 1 2)))
+;(set-mcdr! (mcar lista-parejas) (mcar lista-parejas))
+;(set-mcar! (mcdr lista-parejas) lista-parejas)
 
+(define lista-parejas (mcons (mcons 1 2) (mcons 3 4)))
 ;(define lista-parejas (mcons 1 2))
 ;(set-mcdr! lista-parejas lista-parejas)
 
@@ -451,6 +433,8 @@
                     [style (list 'vscroll 'hscroll)]
                     [parent h-panel-canvas]))
 
+(send canvas init-auto-scrollbars 800 600 0 0)
+
 (define menu-bar (new menu-bar%	 
                       [parent frame]	 
                       ))
@@ -476,6 +460,11 @@
                         (send canvas reload))])
 
 (new menu-item%
+     [label "&Guardar imagen"]
+     [parent menu-archivo]
+     [callback (lambda (menu evento) (send canvas save-as-image))])
+
+(new menu-item%
      [label "&Añadir nuevos nodos"]
      [parent menu-modo]
      [callback (lambda (menu evento)
@@ -492,3 +481,4 @@
 ;(new editor-canvas% [parent v-panel-buttons])
 
 (send frame show #t)
+

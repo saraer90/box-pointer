@@ -6,7 +6,24 @@
 (provide draw-cycle-ending)
 (provide draw-cycle)
 (provide paint)
-(provide paint-list)
+(provide paint-diagram)
+(provide get-diagram-coords)
+
+ ;;;;;; Get max and min x y coords.
+(define (get-coords diagram)
+  (if (mpair? diagram)
+      (append (get-coords (mcar diagram)) (get-coords (mcdr diagram)))
+      (list (diagram "coord"))))
+
+(define (get-diagram-coords diagram)
+  (let ((all-coords (get-coords diagram)))
+    (let ((all-x-coords (map get-x all-coords))
+          (all-y-coords (map get-y all-coords)))
+      (cons (cons (apply min all-x-coords) (apply min all-y-coords))
+            (cons (+ (apply max all-x-coords) SIZE (* 2 CYCLE-MARGIN)) (+ (apply max all-y-coords) SIZE (* 2 CYCLE-MARGIN))))
+      )
+    )
+  )
 
 ;Prints the loops line
 ;Line ending
@@ -109,15 +126,15 @@
 ;If finds an invisible box stops and doesn't print its childs.
 (define (paint functions dc)
   (if (mpair? (mcar functions))
-      (paint-list functions dc)
+      (paint-diagram functions dc)
       (if ((mcar functions) "visible") ;Calls the function with parameter visible to know if it's visible or not.
-          (cons (print (mcar functions) dc) (paint-list (mcdr functions) dc))
+          (cons (print (mcar functions) dc) (paint-diagram (mcdr functions) dc))
           (print (mcar functions) dc) ;If not, prints the element but stops recursion.
           )
       )
   )
 
-(define (paint-list functions dc)
+(define (paint-diagram functions dc)
   (if (mpair? functions)
       (cons (paint (mcar functions) dc) (paint (mcdr functions) dc))
       (print functions dc)
