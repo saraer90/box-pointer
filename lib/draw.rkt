@@ -8,6 +8,11 @@
 (provide paint)
 (provide paint-diagram)
 (provide get-diagram-coords)
+(provide move-diagram)
+
+(define font-size (truncate (/ SIZE MAX-CONTENT)))
+(define font (make-object font% font-size 'default 'normal 'normal #f 'default #t 'aligned))
+
 
  ;;;;;; Get max and min x y coords.
 (define (get-coords diagram)
@@ -68,6 +73,43 @@
     )
   )
 
+;;;;;;;;;;;;;;;;Mover el diagrama;;;;;;;;;;;;;;;;;;;;;;;;
+(define (function-coord-updater diagram difference)
+  (if (mpair? diagram)
+      (coord-updater diagram difference)
+      (if (diagram "es-dato")
+          diagram
+          (let ((orig-coord (diagram "coord")))
+            (begin (set-mcar! orig-coord (+ (mcar orig-coord) (car difference))) 
+                   (set-mcdr! orig-coord (+ (mcdr orig-coord) (cdr difference)))
+                   diagram
+                   )
+            )
+          )
+      )
+  )
+
+(define (coord-updater diagram difference)
+  (if (mpair? diagram)
+      (mcons (function-coord-updater (mcar diagram) difference) (function-coord-updater (mcdr diagram) difference))
+      (function-coord-updater diagram difference)
+      )
+  )
+
+;Mueve las posiciones del diagrama desde el punto seleccionado los pixeles indicados
+(define (move-diagram diagram start-point difference)
+  (if (mpair? diagram)
+      (if (and (mpair? (mcar diagram))
+               (or (intersect? ((mcar (mcar diagram)) "coord") start-point)
+                   (intersect? ((mcar (mcdr diagram)) "coord") start-point)))
+          (coord-updater diagram difference)
+          (mcons (move-diagram (mcar diagram) start-point difference) 
+                 (move-diagram (mcdr diagram) start-point difference))
+          )
+      diagram
+      )
+  )
+
 (define (cycle-finder pair ancestors)
   (if (null? ancestors) 
       (cons #f '())
@@ -93,9 +135,12 @@
                (if es-dato
                    (if (car cycle) 
                        ;Si en vez de dato tenemos un ciclo, debemos pintar la linea
-                       (draw-cycle coord tipo (cdr cycle) dc)                              
-                       (send dc draw-text (~a dato) (+ x PADDING) (+ y PADDING)) ;Dato simple
+                       (draw-cycle coord tipo (cdr cycle) dc)
+                       (begin
+                         (send dc set-font font)
+                         (send dc draw-text (~a dato #:max-width MAX-CONTENT) (+ x PADDING) (+ y PADDING)) ;Dato simple
                        )
+                    )
                    (begin 
                      (send dc draw-rectangle
                            x y       ; Top-left at (x, y), y pixels down from top-left
@@ -121,6 +166,7 @@
                )
     )
   )
+
 
 ;Prints a list of functions calling print 
 ;If finds an invisible box stops and doesn't print its childs.

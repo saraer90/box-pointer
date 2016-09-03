@@ -3,8 +3,10 @@
 (provide MARGIN)
 (provide PADDING)
 (provide CYCLE-MARGIN)
+(provide MAX-CONTENT)
 
-(define SIZE 30)
+(define SIZE 40)
 (define MARGIN (+ 20 SIZE))
-(define PADDING 5)
+(define PADDING (/ SIZE 3))
 (define CYCLE-MARGIN 5)
+(define MAX-CONTENT 3)
