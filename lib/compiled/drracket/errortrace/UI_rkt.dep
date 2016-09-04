@@ -1,0 +1,1 @@
+("6.1" ("94a1fad8f64610253436be9f5bf9656c4e85e854" . "baaf7a10c0f06fbbbc602105dc48e762146eabdb") #"D:\\GitHub\\box-pointer\\lib\\diagram.rkt" #"D:\\GitHub\\box-pointer\\lib\\coordinates.rkt" #"D:\\GitHub\\box-pointer\\lib\\draw.rkt" (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt") (collects #"racket" #"gui" #"base.rkt"))
