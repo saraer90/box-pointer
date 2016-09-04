@@ -7,9 +7,28 @@
 (provide draw-cycle)
 (provide paint)
 (provide paint-diagram)
+(provide get-diagram-coords)
+(provide move-diagram)
 
 (define font-size (truncate (/ SIZE MAX-CONTENT)))
 (define font (make-object font% font-size 'default 'normal 'normal #f 'default #t 'aligned))
+
+
+ ;;;;;; Get max and min x y coords.
+(define (get-coords diagram)
+  (if (mpair? diagram)
+      (append (get-coords (mcar diagram)) (get-coords (mcdr diagram)))
+      (list (diagram "coord"))))
+
+(define (get-diagram-coords diagram)
+  (let ((all-coords (get-coords diagram)))
+    (let ((all-x-coords (map get-x all-coords))
+          (all-y-coords (map get-y all-coords)))
+      (cons (cons (apply min all-x-coords) (apply min all-y-coords))
+            (cons (+ (apply max all-x-coords) SIZE (* 2 CYCLE-MARGIN)) (+ (apply max all-y-coords) SIZE (* 2 CYCLE-MARGIN))))
+      )
+    )
+  )
 
 ;Prints the loops line
 ;Line ending
@@ -52,6 +71,43 @@
     ;Common
     (send dc set-pen original-pen)
     )
+  )
+
+;;;;;;;;;;;;;;;;Mover el diagrama;;;;;;;;;;;;;;;;;;;;;;;;
+(define (function-coord-updater diagram difference)
+  (if (mpair? diagram)
+      (coord-updater diagram difference)
+      (if (diagram "es-dato")
+          diagram
+          (let ((orig-coord (diagram "coord")))
+            (begin (set-mcar! orig-coord (+ (mcar orig-coord) (car difference))) 
+                   (set-mcdr! orig-coord (+ (mcdr orig-coord) (cdr difference)))
+                   diagram
+                   )
+            )
+          )
+      )
+  )
+
+(define (coord-updater diagram difference)
+  (if (mpair? diagram)
+      (mcons (function-coord-updater (mcar diagram) difference) (function-coord-updater (mcdr diagram) difference))
+      (function-coord-updater diagram difference)
+      )
+  )
+
+;Mueve las posiciones del diagrama desde el punto seleccionado los pixeles indicados
+(define (move-diagram diagram start-point difference)
+  (if (mpair? diagram)
+      (if (and (mpair? (mcar diagram))
+               (or (intersect? ((mcar (mcar diagram)) "coord") start-point)
+                   (intersect? ((mcar (mcdr diagram)) "coord") start-point)))
+          (coord-updater diagram difference)
+          (mcons (move-diagram (mcar diagram) start-point difference) 
+                 (move-diagram (mcdr diagram) start-point difference))
+          )
+      diagram
+      )
   )
 
 (define (cycle-finder pair ancestors)

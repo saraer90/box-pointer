@@ -42,7 +42,7 @@
                           [min-height 25]))
 
 ;;Text-fields
-(define feedback-text (new text-field%
+(define text-field-diagram (new text-field%
                                 (label "")
                                 (parent h-panel-text)
                                 (style (list 'multiple))))
@@ -85,12 +85,12 @@
     (inherit refresh-now)
     (inherit make-bitmap)
     
-    (init-field pairs)
-
+    (field (pairs (mcons " " " ")))
     (field (click-event null))
     (field (diagram (new-diagram pairs)))
+    (field (last-click (new-coord 0 0)))
     (field (click (new-coord 0 0)))
-    (field (editor-text-diagram (send feedback-text get-editor)))
+    (field (editor-text-diagram (send text-field-diagram get-editor)))
     (field (my-dc (get-dc)))
     
     
@@ -101,20 +101,11 @@
       )
     )
     
-    (define (show-exception e)
-     (let ((error-message (exn-message e)))
-       (send editor-text-diagram lock #f)
-       (send feedback-text set-value error-message)
-       (send editor-text-diagram lock #t)
-     )
-    )
-    
     ;;;;;;;;;;;;;;;;;;;;;;CANVAS EVENTS;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     (define/override (on-paint)
-      (send my-dc clear)
       (paint-diagram diagram (get-dc))
       (send editor-text-diagram lock #f)
-      (send feedback-text set-value (~a pairs))
+      (send text-field-diagram set-value (~a pairs))
       (send editor-text-diagram lock #t)
       )
 
@@ -122,27 +113,27 @@
       (let ((event (send e get-event-type)))
         (cond ((equal? event 'left-down)
                (begin
+                 (set! last-click (copy-coord click))
                  (set! click (get-coord-scrollbars (new-coord (send e get-x) (send e get-y))))
                  )
                )
               ((equal? event 'left-up)
-                  (with-handlers
-                      ([exn:fail? show-exception])
-                      (let ((event-coord (get-coord-scrollbars (new-coord (send e get-x) (send e get-y)))))
-                        (if (equal? event-coord click)
-                            (if (not (eq? click-event null))
-                                ((eval click-event) this diagram click)
-                                null
-                                )
-                            (let ((x (get-x event-coord))
-                                  (y (get-y event-coord)))
-                              (move-diagram diagram click (cons (- (if (< x 0) 0 x) (mcar click))
-                                                                (- (if (< y 0) 0 y) (mcdr click))))
-                              (refresh-now)
-                              )
-                            )
+                  (let ((event-coord (get-coord-scrollbars (new-coord (send e get-x) (send e get-y)))))
+                    (send my-dc clear) ;Limpiamos el canvas y tras realizar el evento repintamos
+                    (if (equal? event-coord click)
+                        (if (not (eq? click-event null))
+                            ((eval click-event) this diagram click last-click)
+                            null
                         )
-                   )
+                        (let ((x (get-x event-coord))
+                              (y (get-y event-coord)))
+                          (set! diagram (move-diagram diagram click 
+                                                     (cons (- (if (< x 0) 0 x) (mcar click))
+                                                           (- (if (< y 0) 0 y) (mcdr click)))))
+                         )
+                    )
+                    (refresh-now)
+                  )
                )
          )
        )
@@ -156,6 +147,7 @@
     (define/public (set-pairs new-pairs)
       (set! pairs new-pairs)
       (set! diagram (new-diagram pairs))
+      (send (get-dc) clear)
       (refresh-now)
     )
     
@@ -163,26 +155,22 @@
     
     (define/public (reload)
       (set! diagram (new-diagram pairs))
+      (send (get-dc) clear)+
       (refresh-now)
     )
     
     (define/public (new)
       (set! pairs (mcons " " " "))
       (set! diagram (new-diagram pairs))
+      (send (get-dc) clear)
       (refresh-now)
     )
-    
-    (define/public (show-info message)
-       (send editor-text-diagram lock #f)
-       (send feedback-text set-value message)
-       (send editor-text-diagram lock #t)
-     )
     
     (define/public (save-as-image)
       (let ((coords (get-diagram-coords diagram)))
         (let ((bitmap (make-bitmap (cadr coords) (cddr coords))))
           (let ((dc (send bitmap make-dc))
-                (pathfile (put-file "Guardar box&pointer" #f "."  "canvas" ".png" null '(("png" "*.png")))))
+                (pathfile (put-file #:message: "Guardar box&pointer" #:filters (list "*.png"))))
             (paint-diagram diagram dc)
             (send bitmap save-file pathfile 'png)
             )
@@ -192,14 +180,12 @@
     )
   )
 
-(define initial-pairs (mcons " " " "))
-
 (define canvas (new my-canvas% 
-                    [pairs initial-pairs]
                     [style (list 'vscroll 'hscroll)]
                     [parent h-panel-canvas]))
 
 (send canvas init-auto-scrollbars 800 600 0 0)
+
 
 (define (show-ui)
   (send frame show #t)
