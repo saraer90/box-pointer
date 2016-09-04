@@ -17,25 +17,66 @@
 ;Creación de la lista de funciones: visible siempre a true en el inicio
 ;Añade margen superior e izquierdo para poder dibujar las lineas de los ciclos en caso de que fuese necesario
 ;Si no es una lista mira los niveles de car para añadir margen a la izquierda y todo el gráfico sea visible.
-(define (new-diagram list) (list-creator list (new-coord (+ (* MARGIN (count-car-levels (mcar list))) CYCLE-MARGIN) CYCLE-MARGIN) '()))
+(define (new-diagram list) 
+  (delete-overlays
+   (list-creator list (new-coord (+ (* MARGIN (count-car-levels (mcar list))) CYCLE-MARGIN) CYCLE-MARGIN) '())
+  )
+)
+
+;;Busca solapes en el diagrama para intentar solventarlos al pintar
+(define (check-coords diagram)
+  (let ((car-child (mcdr (mcar diagram)))
+        (cdr-child (mcdr (mcdr diagram))))
+    (if (not (mpair? car-child))
+        (mcons (mcar diagram) (delete-overlays (mcdr diagram)))
+        (if (not (mpair? cdr-child))
+             (mcons (delete-overlays (mcar diagram)) (mcdr diagram))
+             (let ((car-coords (get-diagram-coords car-child))
+                   (cdr-coords (get-diagram-coords cdr-child)))
+               (if (>= (cadr car-coords) (caar cdr-coords)) ;Max car coords vs min cdr coords
+                   (let ((difference (+ (- (cadr car-coords) 
+                                                          (caar cdr-coords)) CYCLE-MARGIN)))
+                     (coord-updater cdr-child (cons difference 0))
+                     (delete-overlays diagram)
+                   )
+                   (mcons (delete-overlays (mcar diagram)) (delete-overlays (mcdr diagram)))
+                   )
+             )
+          )
+      )
+   )
+)
+
+(define (delete-overlays diagram)
+  (if (mpair? diagram)
+      (if (not (mpair? (mcar diagram)))
+          (mcons (mcar diagram) (delete-overlays (mcdr diagram)))
+          (if (not (mpair? (mcdr diagram)))
+              (mcons (delete-overlays (mcar diagram)) (mcdr diagram))
+              (check-coords diagram)
+          )
+      )
+      diagram
+  )
+)
+
+          
 
 ;Calcula cuantos niveles hay en cuanto a la parte car de las parejas, para calcular el margen izquierdo
 (define (count-car-levels list)
-  (count-levels list 0 '() 'mcar)
-  )
-
-(define (count-cdr-levels list)
-  (count-levels list 0 '() 'mcdr)
+  (count-levels list 0 '())
   )
 
 ;;Debe ser un pair, si es una lista dejamos de contar ya que se dibujará hacia la derecha o en vertical.
 ;;Además si se encuentra un ciclo también se dejara de contar.
-(define (count-levels list levels ancestors type)
+(define (count-levels list levels ancestors)
   (if (and (mpair? list) (not (car (cycle-finder list ancestors))))
-      (count-levels ((eval type) list) (+ levels 1) (cons (cons list ancestors) '()) type) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
-      levels
-      )
+      (max (count-levels (mcar list) (+ levels 1) (cons (cons list ancestors) '())) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
+           (count-levels (mcdr list) levels (cons (cons list ancestors) '())))
+           levels
   )
+)
+
 
 ;Recorrido previo de la lista de parejas para preparar las funciones y sus coordenadas
 (define (list-creator pair coord ancestors)
@@ -85,33 +126,30 @@
 
 ;Calcula la posición de la siguiente caja
 (define (coord-locator data coord type)
-  (let ((car-levels (count-car-levels data))
-        (cdr-levels (count-cdr-levels data)))
-    (if (mpair? data)
-        (cond ((eq? type 'mcar) 
-               (if (mpair? (mcdr data))
-                    (move-coord coord (- MARGIN) MARGIN) ;Car baja en diagonal
-                    (move-coord coord (- (/ SIZE 2)) MARGIN) ;Si es un dato, bajamos en vertical
-                    ))
-               ((eq? type 'mcdr) ;Primero hay que mirar lo que tenemos en el car
-                (if (mlist? ((eval type) data))
-                    (move-coord coord MARGIN 0)
-                    (if (mpair? (mcar data))
-                        (if (mlist? (mcar data)) ;Si hay una lista
-                            (move-coord coord (- (/ SIZE 2)) (* 2 MARGIN)) ;nos quedamos en la x pero nos movemos el doble en la y
-                            (if (mlist? ((eval type) data))
-                                (move-coord coord MARGIN 0)
-                                (move-coord coord (/ MARGIN 2) MARGIN) 
-                                )
-                            )
-                        (move-coord coord (- (/ SIZE 2)) MARGIN)
-                        )
-                    )
-                ) ;Si no tenemos una lista, comprobaremos que tipo de dato hay en la otra parte de la pareja
-               )       ;si tambien es una pareja pondremos las flechas en diagonal, si no en vertical
-              coord ;En caso de ser un dato simple dejamos la coordenada igual que la de la caja que lo contiene
+  (if (mpair? data)
+      (cond ((eq? type 'mcar) 
+             (if (mpair? (mcdr data))
+                 (move-coord coord (- MARGIN) MARGIN) ;Car baja en diagonal
+                 (move-coord coord (- (/ SIZE 2)) MARGIN) ;Si es un dato, bajamos en vertical
+                 ))
+            ((eq? type 'mcdr) ;Primero hay que mirar lo que tenemos en el car
+             (if (mlist? ((eval type) data))
+                 (move-coord coord MARGIN 0)
+                 (if (mpair? (mcar data))
+                     (if (mlist? (mcar data)) ;Si hay una lista
+                         (move-coord coord (- (/ SIZE 2)) (* 2 MARGIN)) ;nos quedamos en la x pero nos movemos el doble en la y
+                         (if (mlist? ((eval type) data))
+                             (move-coord coord MARGIN 0)
+                             (move-coord coord (/ MARGIN 2) MARGIN) 
+                             )
+                         )
+                     (move-coord coord (- (/ SIZE 2)) MARGIN)
+                     )
+                 )
+             ) ;Si no tenemos una lista, comprobaremos que tipo de dato hay en la otra parte de la pareja
+            )       ;si tambien es una pareja pondremos las flechas en diagonal, si no en vertical
+      coord ;En caso de ser un dato simple dejamos la coordenada igual que la de la caja que lo contiene
       )
-    )
 )
 
 

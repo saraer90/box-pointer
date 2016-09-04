@@ -4,6 +4,7 @@
 (require "diagram.rkt")
 (require "coordinates.rkt")
 (require "settings.rkt")
+(require "utils.rkt")
 
 (provide show-ui)
 (provide menu-bar)
@@ -78,6 +79,11 @@
      [parent menu-archivo]
      [callback (lambda (menu evento) (send canvas save-as-image))])
 
+(new menu-item%
+     [label "&Guardar definición"]
+     [parent menu-archivo]
+     [callback (lambda (menu evento) (send canvas save-definition))])
+
 
 ;;;;;;;;;;;;;;;;;;Canvas;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define my-canvas%
@@ -89,8 +95,7 @@
     (inherit refresh-now)
     (inherit make-bitmap)
     
-    (init-field pairs)
-
+    (field (pairs (mcons " " " ")))
     (field (click-event null))
     (field (diagram (new-diagram pairs)))
     (field (click (new-coord 0 0)))
@@ -107,9 +112,7 @@
     
     (define (show-exception e)
      (let ((error-message (exn-message e)))
-       (send editor-text-diagram lock #f)
-       (send feedback-text set-value error-message)
-       (send editor-text-diagram lock #t)
+       (show-info error-message)
      )
     )
     
@@ -117,9 +120,7 @@
     (define/override (on-paint)
       (send my-dc clear)
       (paint-diagram diagram (get-dc))
-      (send editor-text-diagram lock #f)
-      (send feedback-text set-value (~a pairs))
-      (send editor-text-diagram lock #t)
+      (show-info (string-append (~a pairs) "\n" (get-diagram-string diagram)))
       )
 
     (define/override (on-event e)
@@ -186,20 +187,26 @@
       (let ((coords (get-diagram-coords diagram)))
         (let ((bitmap (make-bitmap (cadr coords) (cddr coords))))
           (let ((dc (send bitmap make-dc))
-                (pathfile (put-file "Guardar box&pointer" #f ".."  "canvas" ".png" null '(("png" "*.png")))))
+                (pathfile (put-file "Guardar box&pointer" #f ".."  "canvas" ".png" null '(("png" "*.png") ("any" "*.*")))))
             (paint-diagram diagram dc)
             (send bitmap save-file pathfile 'png)
             )
           )
         )
     )
+    
+    (define/public (save-definition)
+      (let ((pathfile (put-file "Guardar box&pointer" #f ".."  "canvas" ".rkt" null '(("rkt" "*.rkt") ("any" "*.*")))))
+        (let ((file (open-output-file pathfile #:mode 'text #:exists 'replace)))
+          (display (get-diagram-definition diagram) file)
+          (close-output-port file)
+      )
+     )
+   )
     )
-  )
-
-(define initial-pairs (mcons " " " "))
+)
 
 (define canvas (new my-canvas% 
-                    [pairs initial-pairs]
                     [style (list 'vscroll 'hscroll)]
                     [parent h-panel-canvas]))
 

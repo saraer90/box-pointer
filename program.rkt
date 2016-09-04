@@ -134,7 +134,7 @@
 (define (end-loop canvas diagram click)
     (let ((destiny (search-element diagram click)))
       (if (not (eq? destiny #f))
-          (let ((cycle (cycle-finder  ((mcar destiny) "dato") ((mcar origin) "ancestors"))))
+          (let ((cycle (cycle-finder ((mcar destiny) "dato") ((mcar origin) "ancestors"))))
             (if (car cycle)
                 (begin
                   (create-child canvas origin ((mcar destiny) "dato"))
