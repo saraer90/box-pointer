@@ -3,8 +3,10 @@
 ;menu-bar: barra de menú del frame
 ;canvas: el canvas para que podamos interactuar
 ;h-panel-events: espacio extra para controles de nuestros eventos, en un inicio oculto
-(require "lib/UI.rkt")
 (require "lib/diagram.rkt")
+(require "lib/error-messages.rkt")
+(require "lib/UI.rkt")
+
 (#%require  racket/gui/base)
 
 (provide box-pointer)
@@ -52,15 +54,18 @@
   (if (not (eq? funciones #f)) 
       (let ((funcion (mcar funciones)))
         (if (mpair? ((eval (funcion "tipo")) (funcion "dato"))) 
-            ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
-            (set-mcar! funciones (new-element (funcion "dato") (funcion "coord") (funcion "tipo") 
-                                                     (funcion "es-dato") (not (funcion "visible")) (funcion "ancestors"))
-                                   )
+            (begin
+              ;Cambia el estado anterior de la visibilidad al contrario en caso de intersección
+              (set-mcar! funciones (new-element (funcion "dato") (funcion "coord") (funcion "tipo") 
+                                                (funcion "es-dato") (not (funcion "visible")) (funcion "ancestors"))
+                         )
+              (send canvas refresh-now)
+            )
             ;Datos simples no se esconden, dejamos la lista tal cual
             #f
             )
         )
-      #f
+      (get-error "Contrae / expande" "Debes seleccionar un elemento del diagrama.")
       )
     )
   )
@@ -69,8 +74,11 @@
 (define (add-child canvas diagram click . args)
   (let ((funciones (search-element diagram click)))
     (if (not (eq? funciones #f))
-        (create-child canvas funciones (mcons (send text-field-car get-value) (send text-field-cdr get-value)) #f)
-        #f
+        (begin
+          (create-child canvas funciones (mcons (send text-field-car get-value) (send text-field-cdr get-value)) #f)
+          (send canvas refresh-now)
+        )
+        (get-error "Añadir nuevos nodos" "Debes seleccionar un elemento del diagrama.")
     )
   )
 )
@@ -88,22 +96,56 @@
     
 
 ;;;;;'start-loop : Añade un hijo siendo una referencia a otra caja
-(define (start-loop canvas funciones click . args)
-  (if (not (eq? funciones #f))
-      (send canvas set-event end-loop)
+(define origin-click (mcons 0 0))
+
+(define (start-loop canvas diagram click . args)
+  (let ((origin (search-element diagram click)))
+    (if (not (eq? origin #f))
+        (begin
+          (set! origin-click click)
+          (send canvas show-info (string-append "Se ha seleccionado el elemento: " 
+                                                (~a ((eval ((mcar origin) "tipo")) ((mcar origin) "dato")))))
+          (send canvas set-event end-loop)
+        )
+        (get-error "Añadir nuevos nodos - Bucle" "Debes seleccionar un elemento del diagrama para iniciar el bucle.")
+        )
+    )
+)
+
+(define (compare-ancestors element list)
+  (if (empty? list)
       #f
+      (if (eq? element (car list))
+          #t
+          (compare-ancestors element (cdr list))
+       )
+   )
+)
+
+(define (search-ancestors origin destiny)
+  (let ((ancestors ((mcar origin) "ancestors"))
+        (element ((mcar destiny) "dato")))
+    (let ((data-ancestors (map car ancestors))) ;En la segunda parte están las coordenadas
+      (compare-ancestors element data-ancestors)
+    )
   )
 )
 
 (define (end-loop canvas diagram click . args)
-    (let ((origen (search-element diagram (car args)))
-          (destino (search-element diagram click)))
-      (if (and (not (eq? origen #f)) (not (eq? destino #f)))
-          (create-child canvas origen ((mcar destino) "dato") #t)
-          #f
+    (let ((origin (search-element diagram origin-click))
+          (destiny (search-element diagram click)))
+      (if (and (not (eq? origin #f)) (not (eq? destiny #f)))
+          (if (search-ancestors origin destiny)
+              (begin
+                (create-child canvas origin ((mcar destiny) "dato") #t)
+                (send canvas set-event add-child)
+                (send canvas refresh-now)
+              )
+              (get-error "Añadir nuevos nodos - Bucle" "Debes seleccionar un antecesor del origen del bucle")
+              )
+          (get-error "Añadir nuevos nodos - Bucle" "Debes seleccionar un elemento del diagrama para finalizar el bucle")
           )
       )
-  (send canvas set-event add-child)
 )
 
 

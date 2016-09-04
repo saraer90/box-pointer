@@ -1,0 +1,1 @@
+("6.1" ("6aa38194b7721c62d256e0d0c037d72c78c1e4d6" . "f865f7efee66476eb5cba3ca1e45a4658c1a2032") #"D:\\GitHub\\box-pointer\\lib\\settings.rkt" #"D:\\GitHub\\box-pointer\\lib\\coordinates.rkt" (collects #"racket" #"main.rkt") (collects #"compatibility" #"mlist.rkt") (collects #"racket" #"runtime-config.rkt") #"D:\\GitHub\\box-pointer\\lib\\error-messages.rkt")
