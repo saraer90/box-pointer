@@ -8,9 +8,6 @@
 (provide paint)
 (provide paint-diagram)
 
-(define font-size (truncate (/ SIZE MAX-CONTENT)))
-(define font (make-object font% font-size 'default 'normal 'normal #f 'default #t 'aligned))
-
 ;Prints the loops line
 ;Line ending
 (define (draw-cycle-ending coord cycle dc)
@@ -54,16 +51,6 @@
     )
   )
 
-(define (cycle-finder pair ancestors)
-  (if (null? ancestors) 
-      (cons #f '())
-      (if (eq? (caar ancestors) pair) 
-          (cons #t (cdar ancestors))
-          (cycle-finder pair (cdr ancestors))
-          )
-      )
-  )
-
 (define (print function dc)
   (let ((coord (function "coord"))
         (tipo (function "tipo"))
@@ -73,17 +60,14 @@
         (visible (function "visible")))
     (let ((x (get-x coord))
           (y (get-y coord))
-          (cycle (cycle-finder ((eval tipo) pair) ancestors))
+          (cycle (function "cycle"))
           (dato ((eval tipo) pair))
           (parent-coord (if (null? (cdr ancestors)) '() (cdadr ancestors))))
                (if es-dato
                    (if (car cycle) 
-                       ;Si en vez de dato tenemos un ciclo, debemos pintar la linea
+                       ;Si como dato tenemos un ciclo, debemos pintar la linea
                        (draw-cycle coord tipo (cdr cycle) dc)
-                       (begin
-                         (send dc set-font font)
-                         (send dc draw-text (~a dato #:max-width MAX-CONTENT) (+ x PADDING) (+ y PADDING)) ;Dato simple
-                       )
+                       (send dc draw-text (~a dato #:max-width MAX-CONTENT) (+ x PADDING) (+ y PADDING)) ;Dato simple
                     )
                    (begin 
                      (send dc draw-rectangle

@@ -75,7 +75,7 @@
   (let ((funciones (search-element diagram click)))
     (if (not (eq? funciones #f))
         (begin
-          (create-child canvas funciones (mcons (send text-field-car get-value) (send text-field-cdr get-value)) #f)
+          (create-child canvas funciones (mcons (send text-field-car get-value) (send text-field-cdr get-value)))
           (send canvas refresh-now)
         )
         (get-error "Añadir nuevos nodos" "Debes seleccionar un elemento del diagrama.")
@@ -83,7 +83,7 @@
   )
 )
 
-(define (create-child canvas functions child loop)
+(define (create-child canvas functions child)
   (let ((function (mcar functions)))
     (let ((dato (function "dato")))
         (begin 
@@ -96,13 +96,13 @@
     
 
 ;;;;;'start-loop : Añade un hijo siendo una referencia a otra caja
-(define origin-click (mcons 0 0))
+(define origin (mcons 0 0))
 
 (define (start-loop canvas diagram click . args)
-  (let ((origin (search-element diagram click)))
-    (if (not (eq? origin #f))
+  (let ((origin-element (search-element diagram click)))
+    (if (not (eq? origin-element #f))
         (begin
-          (set! origin-click click)
+          (set! origin origin-element)
           (send canvas show-info (string-append "Se ha seleccionado el elemento: " 
                                                 (~a ((eval ((mcar origin) "tipo")) ((mcar origin) "dato")))))
           (send canvas set-event end-loop)
@@ -131,18 +131,19 @@
   )
 )
 
-(define (end-loop canvas diagram click . args)
-    (let ((origin (search-element diagram origin-click))
-          (destiny (search-element diagram click)))
-      (if (and (not (eq? origin #f)) (not (eq? destiny #f)))
-          (if (search-ancestors origin destiny)
-              (begin
-                (create-child canvas origin ((mcar destiny) "dato") #t)
-                (send canvas set-event add-child)
-                (send canvas refresh-now)
-              )
-              (get-error "Añadir nuevos nodos - Bucle" "Debes seleccionar un antecesor del origen del bucle")
-              )
+(define (end-loop canvas diagram click)
+    (let ((destiny (search-element diagram click)))
+      (if (not (eq? destiny #f))
+          (let ((cycle (cycle-finder  ((mcar destiny) "dato") ((mcar origin) "ancestors"))))
+            (if (car cycle)
+                (begin
+                  (create-child canvas origin ((mcar destiny) "dato"))
+                  (send canvas set-event add-child)
+                  (send canvas refresh-now)
+                  )
+                (get-error "Añadir nuevos nodos - Bucle" "Debes seleccionar un antecesor del origen del bucle")
+                )
+            )
           (get-error "Añadir nuevos nodos - Bucle" "Debes seleccionar un elemento del diagrama para finalizar el bucle")
           )
       )

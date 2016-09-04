@@ -2,7 +2,7 @@
 (provide get-error)
 
 (define (get-error method text)
-   (error 'Error (string-append "[" method "] " text))
+   (raise-user-error 'Error (string-append "[" method "] " text))
 )
 
 

@@ -3,11 +3,15 @@
 (require "draw.rkt")
 (require "diagram.rkt")
 (require "coordinates.rkt")
+(require "settings.rkt")
 
 (provide show-ui)
 (provide menu-bar)
 (provide canvas)
 (provide h-panel-events)
+
+(define font-size (truncate (/ SIZE MAX-CONTENT)))
+(define font (make-object font% font-size 'default 'normal 'normal #f 'default #t 'aligned))
 
 ;;Window: frame
 (define frame (new frame%
@@ -127,7 +131,7 @@
                )
               ((equal? event 'left-up)
                   (with-handlers
-                      ([exn:fail? show-exception])
+                      ([exn:fail:user? show-exception])
                       (let ((event-coord (get-coord-scrollbars (new-coord (send e get-x) (send e get-y)))))
                         (if (equal? event-coord click)
                             (if (not (eq? click-event null))
@@ -182,7 +186,7 @@
       (let ((coords (get-diagram-coords diagram)))
         (let ((bitmap (make-bitmap (cadr coords) (cddr coords))))
           (let ((dc (send bitmap make-dc))
-                (pathfile (put-file "Guardar box&pointer" #f "."  "canvas" ".png" null '(("png" "*.png")))))
+                (pathfile (put-file "Guardar box&pointer" #f ".."  "canvas" ".png" null '(("png" "*.png")))))
             (paint-diagram diagram dc)
             (send bitmap save-file pathfile 'png)
             )
@@ -200,6 +204,7 @@
                     [parent h-panel-canvas]))
 
 (send canvas init-auto-scrollbars 800 600 0 0)
+(send (send canvas get-dc) set-font font)
 
 (define (show-ui)
   (send frame show #t)
