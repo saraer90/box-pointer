@@ -1,5 +1,6 @@
 #lang racket
 (#%require  racket/draw)
+(#%require  racket/draw/arrow)
 (require "settings.rkt")
 (require "coordinates.rkt")
 
@@ -21,9 +22,9 @@
     (send dc draw-line
           x-origin (- y-dest CYCLE-MARGIN)
           x-dest (- y-dest CYCLE-MARGIN))
-    (send dc draw-line
+    (draw-arrow dc	
           x-dest (- y-dest CYCLE-MARGIN)
-          x-dest y-dest)
+          x-dest y-dest 0 0 #:arrow-head-size ARROW-HEAD-SIZE #:arrow-root-radius 0)
     )
   )
 
@@ -67,7 +68,10 @@
                    (if (car cycle) 
                        ;Si como dato tenemos un ciclo, debemos pintar la linea
                        (draw-cycle coord tipo (cdr cycle) dc)
-                       (send dc draw-text (~a dato #:max-width MAX-CONTENT) (+ x PADDING) (+ y PADDING)) ;Dato simple
+                       (if (eq? dato '())
+                           (send dc draw-line x (+ y SIZE) (+ x SIZE) y)
+                           (send dc draw-text (~a dato #:max-width MAX-CONTENT) (+ x PADDING) (+ y PADDING)) ;Dato simple
+                       )
                     )
                    (begin 
                      (send dc draw-rectangle
@@ -75,12 +79,12 @@
                            SIZE SIZE)  ; wide and high
                      (if (and (mpair? parent-coord) (eq? tipo 'mcar)) ;Pintamos las lineas hacia el padre, se encargará la parte car
                          (if (and (> x (+ (mcar parent-coord) SIZE)) (< y (+ (mcdr parent-coord) SIZE)))
-                             (send dc draw-line
+                             (draw-arrow dc
                                    (+ (mcar parent-coord) SIZE ) (+ (mcdr parent-coord) (/ SIZE 2))
-                                   x (+ y (/ SIZE 2)))
-                             (send dc draw-line
+                                   x (+ y (/ SIZE 2)) 0 0 #:arrow-head-size ARROW-HEAD-SIZE #:arrow-root-radius ARROW-ROOT-RADIUS)
+                             (draw-arrow dc
                                    (+ (mcar parent-coord) (/ SIZE 2)) (+ (mcdr parent-coord) SIZE)
-                                   (+ x SIZE) y)
+                                   (+ x SIZE) y 0 0 #:arrow-head-size ARROW-HEAD-SIZE #:arrow-root-radius ARROW-ROOT-RADIUS)
                              )
                          null
                          )   
