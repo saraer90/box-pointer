@@ -1,1 +1,1 @@
-(define pairs (mcons (mcons (mcons "1" "2") (mcons "1" "2") ) (mcons (mcons "1" "2") (mcons "1"  '[loop] ) ) ) )
+(define pairs (mcons (mcons 1 2) (mcons 3 4) ) )
