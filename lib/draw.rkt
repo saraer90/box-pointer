@@ -4,9 +4,6 @@
 (require "settings.rkt")
 (require "coordinates.rkt")
 
-(provide draw-cycle-ending)
-(provide draw-cycle)
-(provide paint)
 (provide paint-diagram)
 
 ;Prints the loops line

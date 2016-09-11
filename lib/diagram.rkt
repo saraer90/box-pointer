@@ -14,11 +14,30 @@
 (provide get-diagram-coords)
 (provide cycle-finder)
 
+
 ;Creación de la lista de funciones: visible siempre a true en el inicio
 ;Añade margen superior e izquierdo para poder dibujar las lineas de los ciclos en caso de que fuese necesario
 ;Si no es una lista mira los niveles de car para añadir margen a la izquierda y todo el gráfico sea visible.
 (define (new-diagram list) (list-creator list (new-coord CYCLE-MARGIN CYCLE-MARGIN) '()))
-        
+
+(define calculados (mlist '*table))
+
+(define (get key)
+   (let ((record (massq key (mcdr calculados))))
+      (if (not record)
+         '()
+         (mcdr record))))
+
+(define (put key value)
+   (let ((record (massq key (mcdr calculados))))
+      (if (not record)
+	      (set-mcdr! calculados (mcons (mcons key value)
+                                 (mcdr calculados)))
+	      (set-mcdr! record value)
+      )
+   )
+)
+
 
 ;Calcula cuantos niveles hay en cuanto a la parte car de las parejas
 (define (count-car-levels list ancestors)
@@ -29,11 +48,18 @@
 ;;Además si se encuentra un ciclo también se dejara de contar.
 (define (count-levels list levels ancestors)
   (if (and (mpair? list) (not (mlist? list)) (not (car (cycle-finder list ancestors))))
-      (max (count-levels (mcar list) (+ levels 1) (cons (cons list '()) ancestors)) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
-           (count-levels (mcdr list) levels (cons (cons list '()) ancestors)))
-           levels
+      ;(let ((calculado (get (~a list))))
+        ;(if (null? calculado)
+              ;(let ((result
+                     (+ (+ 1 (count-levels (mcar list) levels (cons (cons list '()) ancestors))) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
+                                    (count-levels (mcdr list) levels (cons (cons list '()) ancestors)))
+                     ;))
+                ;(put (~a list) result)
+                ;result
+             ;calculado)
+        levels
+        )
   )
-)
 
 
 ;Recorrido previo de la lista de parejas para preparar las funciones y sus coordenadas
