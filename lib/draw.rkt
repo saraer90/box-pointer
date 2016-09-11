@@ -79,12 +79,12 @@
                            SIZE SIZE)  ; wide and high
                      (if (and (mpair? parent-coord) (eq? tipo 'mcar)) ;Pintamos las lineas hacia el padre, se encargará la parte car
                          (if (and (> x (+ (mcar parent-coord) SIZE)) (< y (+ (mcdr parent-coord) SIZE)))
-                             (draw-arrow dc
+                             (draw-arrow dc ;Si vamos en horizontal
                                    (+ (mcar parent-coord) SIZE ) (+ (mcdr parent-coord) (/ SIZE 2))
                                    x (+ y (/ SIZE 2)) 0 0 #:arrow-head-size ARROW-HEAD-SIZE #:arrow-root-radius ARROW-ROOT-RADIUS)
-                             (draw-arrow dc
+                             (draw-arrow dc ;En vertical
                                    (+ (mcar parent-coord) (/ SIZE 2)) (+ (mcdr parent-coord) SIZE)
-                                   (+ x SIZE) y 0 0 #:arrow-head-size ARROW-HEAD-SIZE #:arrow-root-radius ARROW-ROOT-RADIUS)
+                                   (+ x (/ SIZE 2)) y 0 0 #:arrow-head-size ARROW-HEAD-SIZE #:arrow-root-radius ARROW-ROOT-RADIUS)
                              )
                          null
                          )   
