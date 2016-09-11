@@ -47,12 +47,12 @@
 ;;Debe ser un pair, si es una lista dejamos de contar ya que se dibujará hacia la derecha.
 ;;Además si se encuentra un ciclo también se dejara de contar.
 (define (count-levels list levels ancestors)
-  (if (and (mpair? list) (not (mlist? list)) (not (car (cycle-finder list ancestors))))
+  (if (and (mpair? list) (or (mpair? (mcar list)) (mpair? (mcdr list))) (not (mlist? list)) (not (car (cycle-finder list ancestors))))
       ;(let ((calculado (get (~a list))))
         ;(if (null? calculado)
               ;(let ((result
-                     (+ (+ 1 (count-levels (mcar list) levels (cons (cons list '()) ancestors))) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
-                                    (count-levels (mcdr list) levels (cons (cons list '()) ancestors)))
+                     (+ 1 (count-levels (mcar list) levels (cons (cons list '()) ancestors)) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
+                          (count-levels (mcdr list) levels (cons (cons list '()) ancestors)))
                      ;))
                 ;(put (~a list) result)
                 ;result
@@ -113,7 +113,7 @@
       (cond ((eq? type 'mcdr) (move-coord coord MARGIN 0))
             ((eq? type 'mcar)
              (if (and (mpair? (mcdr data)) (not (mlist? data)))
-                 (move-coord coord 0 (* MARGIN (count-car-levels (mcdr data) ancestors)))
+                 (move-coord coord 0 (+ MARGIN (* MARGIN (count-car-levels (mcdr data) ancestors))))
                  (move-coord coord 0 MARGIN)
              ))
       )
