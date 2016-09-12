@@ -40,24 +40,20 @@
 
 
 ;Calcula cuantos niveles hay en cuanto a la parte car de las parejas
-(define (count-car-levels list ancestors)
-  (count-levels list 0 ancestors)
-  )
-
 ;;Debe ser un pair, si es una lista dejamos de contar ya que se dibujará hacia la derecha.
 ;;Además si se encuentra un ciclo también se dejara de contar.
-(define (count-levels list levels ancestors)
+(define (count-car-levels list ancestors)
   (if (and (mpair? list) (or (mpair? (mcar list)) (mpair? (mcdr list))) (not (mlist? list)) (not (car (cycle-finder list ancestors))))
       ;(let ((calculado (get (~a list))))
         ;(if (null? calculado)
               ;(let ((result
-                     (+ 1 (count-levels (mcar list) levels (cons (cons list '()) ancestors)) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
-                          (count-levels (mcdr list) levels (cons (cons list '()) ancestors)))
+                     (+ 1 (count-car-levels (mcar list) (cons (cons list '()) ancestors)) ;No tenemos coordenadas, para reutilizar el metodo añadimos una pareja vacía
+                          (count-car-levels (mcdr list) (cons (cons list '()) ancestors)))
                      ;))
                 ;(put (~a list) result)
                 ;result
              ;calculado)
-        levels
+        0
         )
   )
 
